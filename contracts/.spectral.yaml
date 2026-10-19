@@ -1,2 +1,7 @@
 extends: ["spectral:oas"]
-rules: {}
+
+rules:
+  # Setiap operasi wajib punya operationId (dipakai penamaan contoh §6.5)
+  operation-operationId: error
+  # Respons galat selalu memakai ErrorEnvelope
+  # (dicek juga oleh pemeriksaan cakupan & tes kontrak)

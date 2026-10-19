@@ -19,7 +19,17 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - Catatan: image `minio/minio` tidak dapat ditarik di lingkungan ini (registry restriction); compose menyertakan MinIO untuk kompatibilitas, verifikasi penuh menunggu env dengan akses registry MinIO. Port host dipindah: PG 5433, Redis 6379, MinIO 9000/9001 (hindari bentrok 5432).
 
 ### 0b - Kontrak OpenAPI
-- Status: menunggu 0a selesai
+- [x] `contracts/openapi.yaml` OpenAPI 3.1: 114 endpoint (semua baris REST §5.1-5.14)
+- [x] Komponen: amplop (Envelope/PageEnvelope/ErrorEnvelope), Coordinates, enum domain, 5 view (CitizenReportView/OfferView/UnitView/DispatcherView/IncidentSummary), ErrorCode katalog §7
+- [x] Ekstensi x-permission, x-audit, x-idempotent, security bearerAuth
+- [x] `contracts/scripts/check-coverage.py`: pemeriksaan cakupan dokumen ↔ kontrak
+- [x] `make contract`: Spectral (0 error/warning) + cakupan 114↔114 OK
+- [x] operationId untuk semua operasi (dipakai penamaan contoh quicktype §6.5)
+- Status: SELESAI (0b) - berhenti di sini (titik tinjau C0: kontrak menunggu persetujuan manusia)
+- Penyimpangan: -
+- Asumsi: -
+- Pertanyaan terbuka: -
+- Catatan: contoh JSON (`contracts/examples/`) dan mock server dikerjakan di 0c; `asyncapi.yaml` di 0c.
 
 ### 0c - AsyncAPI, contoh JSON, mock server
-- Status: menunggu 0b selesai
+- Status: menunggu 0b disetujui (C0)

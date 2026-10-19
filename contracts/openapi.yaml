@@ -1,0 +1,3392 @@
+openapi: 3.1.0
+info:
+  title: Emergency Platform API
+  version: 1.0.0
+  description: |
+    Kontrak REST untuk Aplikasi Informasi Bencana & Kejadian Darurat (sampel).
+    Acuan: `docs/specs/rest-api-aplikasi-darurat.md`.
+    Perubahan merusak = versi baru di URL (`/api/v2`).
+  license:
+    name: UNLICENSED
+  contact:
+    name: Emergency Platform (sampel)
+    url: https://example.invalid/emergency-platform
+servers:
+  - url: /api/v1
+    description: Base URL versi 1
+tags:
+  - name: auth
+    description: Autentikasi, sesi, dan akun
+  - name: reference
+    description: Referensi dan konfigurasi publik
+  - name: attachments
+    description: Lampiran (alur presigned)
+  - name: reports
+    description: Laporan warga
+  - name: incidents
+    description: Kejadian
+  - name: dispatches
+    description: Penugasan unit
+  - name: resource-requests
+    description: Permintaan bantuan tambahan
+  - name: units
+    description: Unit
+  - name: alerts
+    description: Alert bencana
+  - name: notifications
+    description: Notifikasi in-app
+  - name: shifts
+    description: Shift dispatcher
+  - name: dashboard
+    description: Ringkasan dashboard
+  - name: admin
+    description: Administrasi organisasi, staf, role, pengaturan, audit
+  - name: sync
+    description: Sinkronisasi (pendukung reconnect)
+  - name: health
+    description: Kesehatan
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, default: 25, minimum: 1, maximum: 100 }
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Kunci idempotensi untuk aksi status (disimpan 24 jam).
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Coordinates:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+        accuracyM: { type: number, format: double, description: Akurasi meter }
+
+    Envelope:
+      type: object
+      required: [data]
+      properties:
+        data: { type: object }
+
+    PageInfo:
+      type: object
+      required: [hasMore]
+      properties:
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+
+    PageEnvelope:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { type: object } }
+        page: { $ref: '#/components/schemas/PageInfo' }
+
+    ErrorDetail:
+      type: object
+      properties:
+        field: { type: string }
+        issue: { type: string }
+
+    ErrorBody:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          allOf:
+            - $ref: '#/components/schemas/ErrorCode'
+          description: Kode stabil bahasa Inggris
+        message: { type: string, description: Pesan bahasa Indonesia }
+        details:
+          type: array
+          items: { $ref: '#/components/schemas/ErrorDetail' }
+        requestId: { type: string }
+        currentVersion:
+          type: [integer, 'null']
+          description: Disertakan pada VERSION_CONFLICT
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+
+    ErrorCode:
+      type: string
+      description: Katalog kode galat (REST §7)
+      enum:
+        - VALIDATION_FAILED
+        - UNAUTHENTICATED
+        - REFRESH_TOKEN_REUSED
+        - OTP_INVALID
+        - OTP_EXPIRED
+        - TWO_FACTOR_REQUIRED
+        - FORBIDDEN
+        - NOT_LEAD_ORGANIZATION
+        - ACCOUNT_DEACTIVATED
+        - NOT_FOUND
+        - VERSION_CONFLICT
+        - INCIDENT_LOCKED
+        - LOCK_REQUIRED
+        - INVALID_STATUS_TRANSITION
+        - INCIDENT_NOT_DISPATCHABLE
+        - ACTIVE_DISPATCHES_EXIST
+        - UNIT_NOT_AVAILABLE
+        - OFFER_NO_LONGER_AVAILABLE
+        - DISPATCH_ALREADY_ACCEPTED
+        - RESOURCE_REQUEST_ALREADY_DECIDED
+        - ATTACHMENT_EXPIRED
+        - REPORT_KIND_NOT_ALLOWED
+        - IDEMPOTENCY_CONFLICT
+        - ATTACHMENT_INVALID
+        - OCCURRED_AT_OUT_OF_RANGE
+        - RATE_LIMITED
+        - OTP_TOO_MANY_ATTEMPTS
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_ERROR
+
+    # ---- Enum domain (nilai tak dikenal ditoleransi klien) ----
+    IncidentStatus:
+      type: string
+      enum:
+        - SUBMITTED
+        - VERIFIED
+        - IN_PROGRESS
+        - RESOLVED
+        - CLOSED
+        - INVALID
+        - DUPLICATE
+
+    PublicStatus:
+      type: string
+      enum:
+        - RECEIVED
+        - VERIFIED
+        - UNIT_DISPATCHED
+        - UNIT_EN_ROUTE
+        - UNIT_ON_SCENE
+        - RESOLVED
+        - NOT_VALID
+        - OUT_OF_AREA
+
+    DispatchStatus:
+      type: string
+      enum:
+        - OFFERED
+        - ACCEPTED
+        - EN_ROUTE
+        - ON_SCENE
+        - DONE
+        - REJECTED
+        - EXPIRED
+        - CANCELLED
+        - NOTIFIED
+        - READY
+        - FULL
+        - PATIENT_ARRIVED
+
+    DispatchType:
+      type: string
+      enum: [RESPOND, NOTIFY]
+
+    DispatchOrigin:
+      type: string
+      enum: [DISPATCHER, SELF_INITIATED, REQUESTED]
+
+    Severity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    ReportKind:
+      type: string
+      enum: [HELP_REQUEST, CONDITION_REPORT]
+
+    ReportStatus:
+      type: string
+      enum: [NEW, REVIEWED, LINKED, WITHDRAWN]
+
+    Channel:
+      type: string
+      enum: [PHONE, WHATSAPP, SMS]
+
+    UnitStatus:
+      type: string
+      enum: [AVAILABLE, BUSY, OFFLINE, OUT_OF_SERVICE]
+
+    UserStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED, DEACTIVATED]
+
+    AlertLevel:
+      type: string
+      description: Konfigurabel (system_settings.alert_levels)
+      enum: [INFO, WARNING, ALERT, EMERGENCY]
+
+    AlertStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, CLOSED]
+
+    DeliveryMode:
+      type: string
+      enum: [REGION_TOPIC, GEOFENCE]
+
+    Urgency:
+      type: string
+      enum: [NORMAL, URGENT]
+
+    VictimHint:
+      type: string
+      enum: [NONE, ONE, TWO, THREE_OR_MORE, MANY, UNKNOWN]
+
+    NoteVisibility:
+      type: string
+      enum: [INTERNAL, LEAD, UNITS]
+
+    RegionLevel:
+      type: string
+      enum: [PROVINCE, DISTRICT, VILLAGE]
+
+    OrganizationType:
+      type: string
+      enum: [POLICE, FIRE, AMBULANCE, BPBD, HOSPITAL, OTHER]
+
+    MilestoneCode:
+      type: string
+      enum:
+        - SCENE_RELEASED
+        - ROAD_REOPENED
+        - VICTIM_DECEASED_HANDLED
+        - EXTERNAL_UNIT_ARRIVED
+        - EXTERNAL_COORDINATION
+
+    OutcomeCode:
+      type: string
+      enum:
+        - COMPLETED
+        - NOT_FOUND
+        - HANDED_OVER
+        - PATIENT_TRANSPORTED
+        - FALSE_ALARM
+
+    # ---- Objek referensi ringkas ----
+    RegionRef:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+
+    IncidentTypeRef:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+
+    IncidentRef:
+      type: object
+      required: [id, code]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: INC-20261005-000123 }
+
+    OrganizationRef:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/OrganizationType' }
+
+    UnitRef:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/UnitStatus' }
+
+    DeviceInfo:
+      type: object
+      required: [platform, appFlavor, appVersion]
+      properties:
+        platform: { type: string, enum: [ANDROID, IOS, WEB] }
+        appFlavor: { type: string, enum: [CITIZEN, STAFF] }
+        appVersion: { type: string, example: 1.0.0 }
+        fcmToken: { type: string }
+        pushEnabled: { type: boolean, default: true }
+
+    # ---- Token ----
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken: { type: string }
+        accessTokenExpiresIn: { type: integer, example: 900 }
+        refreshToken: { type: string }
+        refreshTokenExpiresIn: { type: integer, example: 2592000 }
+        user:
+          type: object
+          required: [id, userType]
+          properties:
+            id: { type: string, format: uuid }
+            userType: { type: string, enum: [CITIZEN, STAFF] }
+            fullName: { type: string }
+            roles: { type: array, items: { type: string } }
+
+    # ---- Views ----
+    DispatchSummary:
+      type: object
+      description: Ringkasan dispatch per incident untuk dashboard
+      properties:
+        active: { type: integer }
+        offered: { type: integer }
+        rejected: { type: integer }
+        expired: { type: integer }
+        byOrganization:
+          type: array
+          items:
+            type: object
+            properties:
+              organization: { $ref: '#/components/schemas/OrganizationRef' }
+              active: { type: integer }
+
+    IncidentSummary:
+      type: object
+      description: Item daftar incident (DispatcherView ringkas)
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        type: { $ref: '#/components/schemas/IncidentTypeRef' }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        district: { $ref: '#/components/schemas/RegionRef' }
+        village: { $ref: '#/components/schemas/RegionRef' }
+        leadOrganization: { $ref: '#/components/schemas/OrganizationRef' }
+        createdAt: { type: string, format: date-time }
+        dispatchSummary: { $ref: '#/components/schemas/DispatchSummary' }
+        attentionReasons:
+          type: array
+          items:
+            type: string
+            enum:
+              - NEEDS_REPLACEMENT
+              - SUGGESTED_DUPLICATE
+              - UNSEEN_OFFER
+              - PENDING_RESOURCE_REQUEST
+
+    OfferIncident:
+      type: object
+      description: Data incident pada OfferView (tanpa lokasi presisi)
+      properties:
+        code: { type: string }
+        type: { $ref: '#/components/schemas/IncidentTypeRef' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        district: { $ref: '#/components/schemas/RegionRef' }
+        village: { $ref: '#/components/schemas/RegionRef' }
+        distanceM: { type: integer }
+
+    OfferView:
+      type: object
+      description: Tampilan responder SEBELUM accept (tanpa lokasi presisi/kontak)
+      required: [dispatchId, incident, type, origin, status]
+      properties:
+        dispatchId: { type: string, format: uuid }
+        incident: { $ref: '#/components/schemas/OfferIncident' }
+        type: { $ref: '#/components/schemas/DispatchType' }
+        origin: { $ref: '#/components/schemas/DispatchOrigin' }
+        status: { $ref: '#/components/schemas/DispatchStatus' }
+        offerExpiresAt: { type: [string, 'null'], format: date-time }
+        note: { type: [string, 'null'] }
+
+    CasualtySnapshot:
+      type: object
+      properties:
+        injured: { type: integer }
+        deceased: { type: integer }
+        critical: { type: [integer, 'null'] }
+        missing: { type: [integer, 'null'] }
+
+    AttachmentRef:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fileName: { type: string }
+        mimeType: { type: string }
+        kind: { type: string, enum: [IMAGE, VIDEO, DOCUMENT] }
+
+    DispatchUnitSummary:
+      type: object
+      description: Ringkasan dispatch unit lain (UnitView)
+      properties:
+        organization: { $ref: '#/components/schemas/OrganizationRef' }
+        unit: { $ref: '#/components/schemas/UnitRef' }
+        status: { $ref: '#/components/schemas/DispatchStatus' }
+        type: { $ref: '#/components/schemas/DispatchType' }
+
+    UnitViewIncident:
+      type: object
+      description: Data incident pada UnitView (SESUDAH accept — lokasi presisi ada)
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        type: { $ref: '#/components/schemas/IncidentTypeRef' }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        publicStatus: { $ref: '#/components/schemas/PublicStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        escalationLevel: { type: [integer, 'null'] }
+        district: { $ref: '#/components/schemas/RegionRef' }
+        village: { $ref: '#/components/schemas/RegionRef' }
+        distanceM: { type: [integer, 'null'] }
+        location: { $ref: '#/components/schemas/Coordinates' }
+        addressText: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/AttachmentRef' }
+        casualties: { $ref: '#/components/schemas/CasualtySnapshot' }
+        otherDispatches:
+          type: array
+          items: { $ref: '#/components/schemas/DispatchUnitSummary' }
+
+    UnitView:
+      type: object
+      description: Tampilan responder SESUDAH accept (lokasi presisi terbuka)
+      required: [dispatchId, incident, type, origin, status]
+      properties:
+        dispatchId: { type: string, format: uuid }
+        incident: { $ref: '#/components/schemas/UnitViewIncident' }
+        type: { $ref: '#/components/schemas/DispatchType' }
+        origin: { $ref: '#/components/schemas/DispatchOrigin' }
+        status: { $ref: '#/components/schemas/DispatchStatus' }
+        offerExpiresAt: { type: [string, 'null'], format: date-time }
+        note: { type: [string, 'null'] }
+        etaMinutes: { type: [integer, 'null'] }
+        destinationOrganization: { $ref: '#/components/schemas/OrganizationRef' }
+
+    CitizenReportView:
+      type: object
+      description: Tampilan warga untuk laporan miliknya sendiri
+      properties:
+        id: { type: string, format: uuid }
+        reportKind: { $ref: '#/components/schemas/ReportKind' }
+        status: { $ref: '#/components/schemas/ReportStatus' }
+        incident: { $ref: '#/components/schemas/IncidentRef' }
+        publicStatus: { $ref: '#/components/schemas/PublicStatus' }
+        location: { $ref: '#/components/schemas/Coordinates' }
+        addressText: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        flags:
+          type: array
+          items: { type: string, enum: [OUT_OF_AREA] }
+        operatingNow: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/AttachmentRef' }
+        emergencyContacts:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              phone: { type: string }
+
+    ReporterMasked:
+      type: object
+      description: Kontak pelapor DIMASK (hanya DispatcherView yang melihat penuh)
+      properties:
+        name: { type: [string, 'null'] }
+        phoneMasked: { type: [string, 'null'], example: 0812****789 }
+
+    DispatcherViewIncident:
+      type: object
+      description: Data incident untuk dispatcher/supervisor (paling lengkap)
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        type: { $ref: '#/components/schemas/IncidentTypeRef' }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        publicStatus: { $ref: '#/components/schemas/PublicStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        escalationLevel: { type: [integer, 'null'] }
+        district: { $ref: '#/components/schemas/RegionRef' }
+        village: { $ref: '#/components/schemas/RegionRef' }
+        location: { $ref: '#/components/schemas/Coordinates' }
+        addressText: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        summary: { type: [string, 'null'] }
+        leadOrganization: { $ref: '#/components/schemas/OrganizationRef' }
+        reporter: { $ref: '#/components/schemas/ReporterMasked' }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/AttachmentRef' }
+        casualties: { $ref: '#/components/schemas/CasualtySnapshot' }
+        dispatches:
+          type: array
+          items: { $ref: '#/components/schemas/DispatchUnitSummary' }
+        lockedBy: { type: [string, 'null'], format: uuid }
+        lockedAt: { type: [string, 'null'], format: date-time }
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+  responses:
+    Unauthorized:
+      description: 401 — Token tidak ada/kedaluwarsa
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: 403 — Tidak punya permission
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: 404 — Resource tidak ada atau tidak boleh dilihat
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: 409 — Konflik (lock, version, transisi, balapan)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unprocessable:
+      description: 422 — Isi tidak valid secara semantik
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    RateLimited:
+      description: 429 — Terlalu sering
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationFailed:
+      description: 400 — Validasi DTO gagal
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+paths:
+  # ==== 5.1 Autentikasi dan akun ====
+  /auth/otp/request:
+    post:
+      tags: [auth]
+      summary: Minta OTP
+      operationId: POSTAuthOtpRequest
+      description: "Minta OTP"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, purpose]
+              properties:
+                phone: { type: string }
+                purpose: { type: string, enum: [REGISTER, LOGIN] }
+      responses:
+        '202':
+          description: OTP terkirim
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expiresInSeconds: { type: integer }
+                  resendAfterSeconds: { type: integer }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/citizen/register:
+    post:
+      tags: [auth]
+      summary: Registrasi warga baru
+      operationId: POSTAuthCitizenRegister
+      description: "Registrasi warga baru"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otpCode, fullName, device]
+              properties:
+                phone: { type: string }
+                otpCode: { type: string }
+                fullName: { type: string }
+                homeLocation: { $ref: '#/components/schemas/Coordinates' }
+                device: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '201':
+          description: Registrasi berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/citizen/login:
+    post:
+      tags: [auth]
+      summary: Login warga dengan OTP
+      operationId: POSTAuthCitizenLogin
+      description: "Login warga dengan OTP"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otpCode, device]
+              properties:
+                phone: { type: string }
+                otpCode: { type: string }
+                device: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/staff/login:
+    post:
+      tags: [auth]
+      summary: Login staf (mungkin perlu 2FA)
+      operationId: POSTAuthStaffLogin
+      description: "Login staf (mungkin perlu 2FA)"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password, device]
+              properties:
+                identifier: { type: string, description: Nomor HP atau email }
+                password: { type: string }
+                device: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '200':
+          description: Login berhasil ATAU perlu 2FA
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - $ref: '#/components/schemas/TokenPair'
+                          - type: object
+                            properties:
+                              twoFactorRequired: { type: boolean, const: true }
+                              challengeToken: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/staff/login/2fa:
+    post:
+      tags: [auth]
+      summary: Selesaikan login staf dengan kode TOTP
+      operationId: POSTAuthStaffLogin2fa
+      description: "Selesaikan login staf dengan kode TOTP"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeToken, code]
+              properties:
+                challengeToken: { type: string }
+                code: { type: string }
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh token (rotasi)
+      operationId: POSTAuthRefresh
+      description: "Refresh token (rotasi)"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Token baru (rotasi)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Cabut sesi saat ini
+      operationId: POSTAuthLogout
+      description: "Cabut sesi saat ini"
+      responses:
+        '204': { description: Berhasil }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/sessions:
+    get:
+      tags: [auth]
+      summary: Daftar sesi aktif sendiri
+      operationId: GETAuthSessions
+      description: "Daftar sesi aktif sendiri"
+      responses:
+        '200':
+          description: Daftar sesi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [auth]
+      summary: Cabut sesi tertentu
+      operationId: DELETEAuthSessionsId
+      description: "Cabut sesi tertentu"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /auth/password/change:
+    post:
+      tags: [auth]
+      summary: Ganti kata sandi staf
+      operationId: POSTAuthPasswordChange
+      description: "Ganti kata sandi staf"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string }
+      responses:
+        '204': { description: Berhasil }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/2fa/setup:
+    post:
+      tags: [auth]
+      summary: Mulai pendaftaran TOTP
+      operationId: POSTAuth2faSetup
+      description: "Mulai pendaftaran TOTP"
+      responses:
+        '200':
+          description: Rahasia TOTP
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          secret: { type: string }
+                          otpauthUri: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/2fa/enable:
+    post:
+      tags: [auth]
+      summary: Konfirmasi TOTP dengan kode
+      operationId: POSTAuth2faEnable
+      description: "Konfirmasi TOTP dengan kode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '204': { description: Berhasil }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me:
+    get:
+      tags: [auth]
+      summary: Profil, role, organisasi/unit, permissions (staf)
+      operationId: GETMe
+      description: "Profil, role, organisasi/unit, permissions (staf)"
+      responses:
+        '200':
+          description: Profil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [auth]
+      summary: Ubah profil sendiri
+      operationId: PATCHMe
+      description: "Ubah profil sendiri"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: { type: string }
+                email: { type: string }
+                homeLocation: { $ref: '#/components/schemas/Coordinates' }
+                homeAddress: { type: string }
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/devices:
+    post:
+      tags: [auth]
+      summary: Daftarkan/perbarui token FCM
+      operationId: POSTMeDevices
+      description: "Daftarkan/perbarui token FCM"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /me/devices/{id}:
+    delete:
+      tags: [auth]
+      summary: Cabut perangkat
+      operationId: DELETEMeDevicesId
+      description: "Cabut perangkat"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me/alert-topics:
+    get:
+      tags: [auth]
+      summary: Daftar FCM topic sesuai wilayah rumah (warga)
+      operationId: GETMeAlertTopics
+      description: "Daftar FCM topic sesuai wilayah rumah (warga)"
+      responses:
+        '200':
+          description: Daftar topic
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          topics: { type: array, items: { type: string } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ==== 5.2 Referensi dan konfigurasi publik ====
+  /config/public:
+    get:
+      tags: [reference]
+      summary: Konfigurasi publik (darurat, jam operasional)
+      operationId: GETConfigPublic
+      description: "Konfigurasi publik (darurat, jam operasional)"
+      security: []
+      responses:
+        '200':
+          description: Konfigurasi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          serverTime: { type: string, format: date-time }
+                          minAppVersion: { type: string }
+                          operatingHours: { type: object }
+                          operatingNow: { type: boolean }
+                          emergencyContacts:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                name: { type: string }
+                                phone: { type: string }
+                          limits: { type: object }
+                          disclaimer: { type: string }
+
+  /incident-types:
+    get:
+      tags: [reference]
+      summary: Daftar jenis kejadian aktif
+      operationId: GETIncidentTypes
+      description: "Daftar jenis kejadian aktif"
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /regions:
+    get:
+      tags: [reference]
+      summary: Daftar wilayah (tanpa polygon)
+      operationId: GETRegions
+      description: "Daftar wilayah (tanpa polygon)"
+      parameters:
+        - name: level
+          in: query
+          schema: { $ref: '#/components/schemas/RegionLevel' }
+        - name: parentId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /regions/resolve:
+    get:
+      tags: [reference]
+      summary: Tentukan kecamatan/kelurahan dari titik
+      operationId: GETRegionsResolve
+      description: "Tentukan kecamatan/kelurahan dari titik"
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number }
+        - name: lng
+          in: query
+          required: true
+          schema: { type: number }
+      responses:
+        '200':
+          description: Hasil resolve
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          inServiceArea: { type: boolean }
+                          district: { $ref: '#/components/schemas/RegionRef' }
+                          village: { $ref: '#/components/schemas/RegionRef' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ==== 5.14 Kesehatan ====
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness
+      operationId: GETHealth
+      description: "Liveness"
+      security: []
+      responses:
+        '200': { description: Hidup }
+
+  /health/ready:
+    get:
+      tags: [health]
+      summary: Readiness (DB, Redis, object storage)
+      operationId: GETHealthReady
+      description: "Readiness (DB, Redis, object storage)"
+      security: []
+      responses:
+        '200': { description: Siap }
+        '503': { description: Dependensi bermasalah }
+
+  # ==== 5.3 Lampiran ====
+  /attachments/uploads:
+    post:
+      tags: [attachments]
+      summary: Minta URL unggah presigned
+      operationId: POSTAttachmentsUploads
+      description: "Minta URL unggah presigned"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, mimeType, sizeBytes, kind, purpose]
+              properties:
+                fileName: { type: string }
+                mimeType: { type: string }
+                sizeBytes: { type: integer }
+                kind: { type: string, enum: [IMAGE, VIDEO, DOCUMENT] }
+                purpose: { type: string, enum: [REPORT, INCIDENT, DISPATCH] }
+                ownerId: { type: [string, 'null'], format: uuid }
+      responses:
+        '201':
+          description: URL unggah
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          attachmentId: { type: string, format: uuid }
+                          uploadUrl: { type: string }
+                          expiresAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /attachments/{id}/confirm:
+    post:
+      tags: [attachments]
+      summary: Konfirmasi unggahan (PENDING → CONFIRMED)
+      operationId: POSTAttachmentsIdConfirm
+      description: "Konfirmasi unggahan (PENDING → CONFIRMED)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Terkonfirmasi }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /attachments/{id}/url:
+    get:
+      tags: [attachments]
+      summary: Signed URL baca (berumur pendek)
+      operationId: GETAttachmentsIdUrl
+      description: "Signed URL baca (berumur pendek)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: URL baca
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          url: { type: string }
+                          expiresAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ==== 5.4 Laporan warga ====
+  /reports:
+    post:
+      tags: [reports]
+      summary: Buat laporan (idempoten via clientReportId)
+      operationId: POSTReports
+      description: "Buat laporan (idempoten via clientReportId)"
+      x-idempotent: clientReportId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientReportId, reportKind, typeCode, location]
+              properties:
+                clientReportId: { type: string, format: uuid }
+                reportKind: { $ref: '#/components/schemas/ReportKind' }
+                typeCode: { type: string }
+                location: { $ref: '#/components/schemas/Coordinates' }
+                addressText: { type: string }
+                description: { type: string }
+                victimHint: { $ref: '#/components/schemas/VictimHint' }
+                occurredAt: { type: string, format: date-time }
+                attachmentIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: Laporan dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CitizenReportView' }
+        '200':
+          description: clientReportId sudah pernah diterima (idempoten)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CitizenReportView' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /reports/mine:
+    get:
+      tags: [reports]
+      summary: Daftar laporan sendiri
+      operationId: GETReportsMine
+      description: "Daftar laporan sendiri"
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /reports/{id}:
+    get:
+      tags: [reports]
+      summary: Detail laporan + publicStatus
+      operationId: GETReportsId
+      description: "Detail laporan + publicStatus"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CitizenReportView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{id}/timeline:
+    get:
+      tags: [reports]
+      summary: Event laporan (visibility PUBLIC)
+      operationId: GETReportsIdTimeline
+      description: "Event laporan (visibility PUBLIC)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Timeline
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{id}/follow-ups:
+    post:
+      tags: [reports]
+      summary: Laporan susulan (incident sama)
+      operationId: POSTReportsIdFollowUps
+      description: "Laporan susulan (incident sama)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientReportId, description]
+              properties:
+                clientReportId: { type: string, format: uuid }
+                description: { type: string }
+                location: { $ref: '#/components/schemas/Coordinates' }
+                victimHint: { $ref: '#/components/schemas/VictimHint' }
+                attachmentIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: Laporan susulan dibuat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{id}/withdraw:
+    post:
+      tags: [reports]
+      summary: Warga menarik laporan
+      operationId: POSTReportsIdWithdraw
+      description: "Warga menarik laporan"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Berhasil dicatat }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/{id}/reveal-contact:
+    post:
+      tags: [reports]
+      summary: Buka kontak pelapor penuh (tercatat audit)
+      operationId: POSTReportsIdRevealContact
+      description: "Buka kontak pelapor penuh (tercatat audit)"
+      x-audit: pii.view_reporter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Kontak penuh
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          name: { type: string }
+                          phone: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ==== 5.5 Incident ====
+  /incidents:
+    get:
+      tags: [incidents]
+      summary: Antrean/daftar incident
+      operationId: GETIncidents
+      description: "Antrean/daftar incident"
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+          description: Nilai dipisah koma
+        - name: typeCode
+          in: query
+          schema: { type: string }
+        - name: severity
+          in: query
+          schema: { $ref: '#/components/schemas/Severity' }
+        - name: districtId
+          in: query
+          schema: { type: string }
+        - name: leadOrgId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: lockedBy
+          in: query
+          schema: { type: string, format: uuid }
+        - name: flag
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: ['-createdAt', '-severity', 'createdAt'] }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/IncidentSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [incidents]
+      summary: Input manual incident (penelepon)
+      operationId: POSTIncidents
+      description: "Input manual incident (penelepon)"
+      x-permission: incident.create_manual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [typeCode, location, description, reporter, channel]
+              properties:
+                typeCode: { type: string }
+                location: { $ref: '#/components/schemas/Coordinates' }
+                addressText: { type: string }
+                description: { type: string }
+                reporter:
+                  type: object
+                  required: [name, phone]
+                  properties:
+                    name: { type: string }
+                    phone: { type: string }
+                channel: { $ref: '#/components/schemas/Channel' }
+                severity: { $ref: '#/components/schemas/Severity' }
+      responses:
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /incidents/{id}:
+    get:
+      tags: [incidents]
+      summary: Detail incident (bentuk sesuai role)
+      operationId: GETIncidentsId
+      description: "Detail incident (bentuk sesuai role)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail (bentuk sesuai role)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        description: DispatcherView / OfferView / UnitView sesuai role
+                        oneOf:
+                          - $ref: '#/components/schemas/DispatcherViewIncident'
+                          - $ref: '#/components/schemas/OfferView'
+                          - $ref: '#/components/schemas/UnitView'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [incidents]
+      summary: Ubah data incident (wajib pegang kunci + version)
+      operationId: PATCHIncidentsId
+      description: "Ubah data incident (wajib pegang kunci + version)"
+      x-permission: incident.update
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+                typeCode: { type: string }
+                severity: { $ref: '#/components/schemas/Severity' }
+                escalationLevel: { type: integer }
+                summary: { type: string }
+                location: { $ref: '#/components/schemas/Coordinates' }
+                addressText: { type: string }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/lock:
+    post:
+      tags: [incidents]
+      summary: Ambil kunci incident
+      operationId: POSTIncidentsIdLock
+      description: "Ambil kunci incident"
+      x-permission: incident.lock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force: { type: boolean, description: Butuh incident.lock_override }
+      responses:
+        '200': { description: Kunci diambil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [incidents]
+      summary: Lepas kunci
+      operationId: DELETEIncidentsIdLock
+      description: "Lepas kunci"
+      x-permission: incident.lock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil }
+
+  /incidents/{id}/lock/renew:
+    post:
+      tags: [incidents]
+      summary: Perpanjang kunci (heartbeat)
+      operationId: POSTIncidentsIdLockRenew
+      description: "Perpanjang kunci (heartbeat)"
+      x-permission: incident.lock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Diperpanjang }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/verify:
+    post:
+      tags: [incidents]
+      summary: SUBMITTED → VERIFIED
+      operationId: POSTIncidentsIdVerify
+      description: "SUBMITTED → VERIFIED"
+      x-permission: incident.verify
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, severity]
+              properties:
+                version: { type: integer }
+                severity: { $ref: '#/components/schemas/Severity' }
+                leadOrganizationId: { type: [string, 'null'], format: uuid }
+                summary: { type: string }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/invalidate:
+    post:
+      tags: [incidents]
+      summary: → INVALID
+      operationId: POSTIncidentsIdInvalidate
+      description: "→ INVALID"
+      x-permission: incident.invalidate
+      x-audit: incident.invalidate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, reason]
+              properties:
+                version: { type: integer }
+                reason: { type: string }
+      responses:
+        '200': { description: Berhasil }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/merge:
+    post:
+      tags: [incidents]
+      summary: → DUPLICATE dari targetIncidentId
+      operationId: POSTIncidentsIdMerge
+      description: "→ DUPLICATE dari targetIncidentId"
+      x-permission: incident.merge
+      x-audit: incident.merge
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, targetIncidentId]
+              properties:
+                version: { type: integer }
+                targetIncidentId: { type: string, format: uuid }
+                reason: { type: string }
+      responses:
+        '200': { description: Berhasil }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/nearby:
+    get:
+      tags: [incidents]
+      summary: Kandidat duplikat (radius + jam)
+      operationId: GETIncidentsIdNearby
+      description: "Kandidat duplikat (radius + jam)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: radiusM
+          in: query
+          schema: { type: integer, default: 300 }
+        - name: hours
+          in: query
+          schema: { type: integer, default: 6 }
+      responses:
+        '200':
+          description: Kandidat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /incidents/{id}/lead:
+    put:
+      tags: [incidents]
+      summary: Ubah pemegang komando
+      operationId: PUTIncidentsIdLead
+      description: "Ubah pemegang komando"
+      x-permission: incident.set_lead
+      x-audit: incident.set_lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId, reason]
+              properties:
+                organizationId: { type: string, format: uuid }
+                reason: { type: string }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /incidents/{id}/resolve:
+    post:
+      tags: [incidents]
+      summary: → RESOLVED
+      operationId: POSTIncidentsIdResolve
+      description: "→ RESOLVED"
+      x-permission: incident.close
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+                note: { type: string }
+                forceCloseDispatches: { type: boolean }
+      responses:
+        '200': { description: Berhasil }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/close:
+    post:
+      tags: [incidents]
+      summary: RESOLVED → CLOSED
+      operationId: POSTIncidentsIdClose
+      description: "RESOLVED → CLOSED"
+      x-permission: incident.close
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer }
+                note: { type: string }
+      responses:
+        '200': { description: Berhasil }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/notes:
+    post:
+      tags: [incidents]
+      summary: Catatan internal
+      operationId: POSTIncidentsIdNotes
+      description: "Catatan internal"
+      x-permission: note.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, visibility]
+              properties:
+                text: { type: string }
+                visibility: { $ref: '#/components/schemas/NoteVisibility' }
+      responses:
+        '201': { description: Dibuat }
+
+  /incidents/{id}/reports:
+    get:
+      tags: [incidents]
+      summary: Laporan tertaut (kontak dimask)
+      operationId: GETIncidentsIdReports
+      description: "Laporan tertaut (kontak dimask)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+
+  /incidents/{id}/casualties:
+    post:
+      tags: [incidents]
+      summary: Update data korban (menambah riwayat)
+      operationId: POSTIncidentsIdCasualties
+      description: "Update data korban (menambah riwayat)"
+      x-permission: casualty.update
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [injured, deceased]
+              properties:
+                injured: { type: integer }
+                deceased: { type: integer }
+                critical: { type: integer }
+                missing: { type: integer }
+                note: { type: string }
+      responses:
+        '201': { description: Dicatat }
+
+  /incidents/{id}/milestones:
+    post:
+      tags: [incidents]
+      summary: Catat milestone (responder hanya bila lead)
+      operationId: POSTIncidentsIdMilestones
+      description: "Catat milestone (responder hanya bila lead)"
+      x-permission: milestone.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { $ref: '#/components/schemas/MilestoneCode' }
+                note: { type: string }
+                payload: { type: object }
+                occurredAt: { type: string, format: date-time }
+      responses:
+        '201': { description: Dicatat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /incidents/{id}/events:
+    get:
+      tags: [incidents]
+      summary: Event log (disaring visibility)
+      operationId: GETIncidentsIdEvents
+      description: "Event log (disaring visibility)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: afterId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+
+  /incidents/{id}/dispatch-recommendations:
+    get:
+      tags: [incidents]
+      summary: Rekomendasi unit/organisasi
+      operationId: GETIncidentsIdDispatchRecommendations
+      description: "Rekomendasi unit/organisasi"
+      x-permission: dispatch.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: orgType
+          in: query
+          schema: { $ref: '#/components/schemas/OrganizationType' }
+        - name: unitType
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Rekomendasi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  # ==== 5.6 Dispatch ====
+  /incidents/{id}/dispatches:
+    post:
+      tags: [dispatches]
+      summary: Buat satu dispatch
+      operationId: POSTIncidentsIdDispatches
+      description: "Buat satu dispatch"
+      x-permission: dispatch.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId, type]
+              properties:
+                organizationId: { type: string, format: uuid }
+                unitId: { type: [string, 'null'], format: uuid }
+                type: { $ref: '#/components/schemas/DispatchType' }
+                note: { type: string }
+                offerTimeoutSeconds: { type: integer }
+                ignoreAvailability: { type: boolean }
+      responses:
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OfferView' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/dispatches/batch:
+    post:
+      tags: [dispatches]
+      summary: Buat beberapa dispatch (atomik)
+      operationId: POSTIncidentsIdDispatchesBatch
+      description: "Buat beberapa dispatch (atomik)"
+      x-permission: dispatch.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dispatches]
+              properties:
+                dispatches:
+                  type: array
+                  items:
+                    type: object
+                    required: [organizationId, type]
+                    properties:
+                      organizationId: { type: string, format: uuid }
+                      unitId: { type: [string, 'null'], format: uuid }
+                      type: { $ref: '#/components/schemas/DispatchType' }
+                      note: { type: string }
+      responses:
+        '201':
+          description: Semua dibuat (atomik)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/OfferView' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/dispatches/on-behalf:
+    post:
+      tags: [dispatches]
+      summary: Catat penugasan di luar aplikasi (atas nama)
+      operationId: POSTIncidentsIdDispatchesOnBehalf
+      description: "Catat penugasan di luar aplikasi (atas nama)"
+      x-permission: dispatch.record_on_behalf
+      x-audit: dispatch.record_on_behalf
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId, type, origin, initialStatus, channel]
+              properties:
+                organizationId: { type: string, format: uuid }
+                unitId: { type: [string, 'null'], format: uuid }
+                type: { $ref: '#/components/schemas/DispatchType' }
+                origin: { $ref: '#/components/schemas/DispatchOrigin' }
+                initialStatus: { $ref: '#/components/schemas/DispatchStatus' }
+                channel: { $ref: '#/components/schemas/Channel' }
+                occurredAt: { type: string, format: date-time }
+                note: { type: string }
+      responses:
+        '201': { description: Dicatat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /incidents/{id}/self-initiate:
+    post:
+      tags: [dispatches]
+      summary: 'Saya berangkat (dispatch langsung EN_ROUTE)'
+      operationId: POSTIncidentsIdSelfInitiate
+      description: "Saya berangkat (dispatch langsung EN_ROUTE)"
+      x-permission: dispatch.self_initiate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [unitId]
+              properties:
+                unitId: { type: string, format: uuid }
+                etaMinutes: { type: integer }
+      responses:
+        '201': { description: Dibuat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /dispatches/mine:
+    get:
+      tags: [dispatches]
+      summary: Dispatch untuk unit/organisasi pengguna
+      operationId: GETDispatchesMine
+      description: "Dispatch untuk unit/organisasi pengguna"
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: active
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /dispatches/{id}:
+    get:
+      tags: [dispatches]
+      summary: Detail dispatch (OfferView atau UnitView)
+      operationId: GETDispatchesId
+      description: "Detail dispatch (OfferView atau UnitView)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OfferView (OFFERED) atau UnitView (sesudah accept)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        description: OfferView atau UnitView sesuai status
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /dispatches/{id}/seen:
+    post:
+      tags: [dispatches]
+      summary: Ack offer sudah dilihat
+      operationId: POSTDispatchesIdSeen
+      description: "Ack offer sudah dilihat"
+      x-permission: dispatch.respond
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Berhasil }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /dispatches/{id}/accept:
+    post:
+      tags: [dispatches]
+      summary: Terima dispatch
+      operationId: POSTDispatchesIdAccept
+      description: "Terima dispatch"
+      x-permission: dispatch.respond
+      x-idempotent: header
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unitId: { type: [string, 'null'], format: uuid, description: Wajib bila dispatch ke organisasi tanpa unit }
+                etaMinutes: { type: integer }
+      responses:
+        '200':
+          description: Diterima — memuat UnitView (lokasi presisi terbuka)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitView' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /dispatches/{id}/reject:
+    post:
+      tags: [dispatches]
+      summary: Tolak dispatch
+      operationId: POSTDispatchesIdReject
+      description: "Tolak dispatch"
+      x-permission: dispatch.respond
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Ditolak }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /dispatches/{id}/status:
+    post:
+      tags: [dispatches]
+      summary: Pindah status dispatch
+      operationId: POSTDispatchesIdStatus
+      description: "Pindah status dispatch"
+      x-permission: dispatch.respond
+      x-idempotent: header
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toStatus, version]
+              properties:
+                toStatus: { $ref: '#/components/schemas/DispatchStatus' }
+                version: { type: integer }
+                occurredAt: { type: string, format: date-time }
+                note: { type: string }
+                outcomeCode: { $ref: '#/components/schemas/OutcomeCode' }
+                outcomeNote: { type: string }
+                channel: { $ref: '#/components/schemas/Channel' }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /dispatches/{id}/destination:
+    post:
+      tags: [dispatches]
+      summary: Pilih RS tujuan (membuat NOTIFY ke IGD)
+      operationId: POSTDispatchesIdDestination
+      description: "Pilih RS tujuan (membuat NOTIFY ke IGD)"
+      x-permission: dispatch.respond
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [organizationId, patientSummary]
+              properties:
+                organizationId: { type: string, format: uuid }
+                patientSummary:
+                  type: object
+                  required: [injured, critical]
+                  properties:
+                    injured: { type: integer }
+                    critical: { type: integer }
+                etaMinutes: { type: integer }
+      responses:
+        '201': { description: NOTIFY ke IGD dibuat }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /dispatches/{id}/cancel:
+    post:
+      tags: [dispatches]
+      summary: Batalkan dispatch
+      operationId: POSTDispatchesIdCancel
+      description: "Batalkan dispatch"
+      x-permission: dispatch.cancel
+      x-audit: dispatch.cancel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Dibatalkan }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ==== 5.7 Resource request ====
+  /incidents/{id}/resource-requests:
+    post:
+      tags: [resource-requests]
+      summary: Ajukan bantuan tambahan (hanya lead)
+      operationId: POSTIncidentsIdResourceRequests
+      description: "Ajukan bantuan tambahan (hanya lead)"
+      x-permission: resource_request.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resourceType, quantity, urgency, reason]
+              properties:
+                resourceType: { type: string, description: Jenis organisasi/unit }
+                quantity: { type: integer }
+                urgency: { $ref: '#/components/schemas/Urgency' }
+                reason: { type: string }
+      responses:
+        '201': { description: Dibuat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /resource-requests:
+    get:
+      tags: [resource-requests]
+      summary: Daftar permintaan (untuk diputuskan)
+      operationId: GETResourceRequests
+      description: "Daftar permintaan (untuk diputuskan)"
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING] }
+        - name: incidentId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+
+  /resource-requests/{id}/approve:
+    post:
+      tags: [resource-requests]
+      summary: Setujui (membuat dispatch REQUESTED)
+      operationId: POSTResourceRequestsIdApprove
+      description: "Setujui (membuat dispatch REQUESTED)"
+      x-permission: resource_request.decide
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dispatches]
+              properties:
+                dispatches:
+                  type: array
+                  items:
+                    type: object
+                    required: [organizationId, type]
+                    properties:
+                      organizationId: { type: string, format: uuid }
+                      unitId: { type: [string, 'null'], format: uuid }
+                      type: { $ref: '#/components/schemas/DispatchType' }
+                      note: { type: string }
+      responses:
+        '200': { description: 'Disetujui, dispatch terbentuk' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /resource-requests/{id}/reject:
+    post:
+      tags: [resource-requests]
+      summary: Tolak permintaan
+      operationId: POSTResourceRequestsIdReject
+      description: "Tolak permintaan"
+      x-permission: resource_request.decide
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string }
+      responses:
+        '200': { description: Ditolak }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /resource-requests/{id}:
+    delete:
+      tags: [resource-requests]
+      summary: Pemohon batalkan (selama PENDING)
+      operationId: DELETEResourceRequestsId
+      description: "Pemohon batalkan (selama PENDING)"
+      x-permission: resource_request.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Dibatalkan }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ==== 5.8 Unit ====
+  /units/{id}/status:
+    put:
+      tags: [units]
+      summary: Ubah status unit
+      operationId: PUTUnitsIdStatus
+      description: "Ubah status unit"
+      x-permission: unit.update_own
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/UnitStatus' }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /units/{id}/location:
+    put:
+      tags: [units]
+      summary: Perbarui lokasi unit terakhir
+      operationId: PUTUnitsIdLocation
+      description: "Perbarui lokasi unit terakhir"
+      x-permission: unit.update_own
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                accuracyM: { type: number }
+                recordedAt: { type: string, format: date-time }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /units:
+    get:
+      tags: [units]
+      summary: Daftar unit (dispatcher)
+      operationId: GETUnits
+      description: "Daftar unit (dispatcher)"
+      parameters:
+        - name: orgType
+          in: query
+          schema: { $ref: '#/components/schemas/OrganizationType' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/UnitStatus' }
+        - name: districtId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+
+  # ==== 5.9 Alert bencana ====
+  /alerts:
+    get:
+      tags: [alerts]
+      summary: 'Alert ACTIVE (warga: relevan wilayah rumah)'
+      operationId: GETAlerts
+      description: "Alert ACTIVE (warga: relevan wilayah rumah)"
+      parameters:
+        - name: scope
+          in: query
+          schema: { type: string, enum: [mine, all], default: mine }
+        - name: category
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /alerts/{id}:
+    get:
+      tags: [alerts]
+      summary: Detail alert
+      operationId: GETAlertsId
+      description: "Detail alert"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/alerts:
+    get:
+      tags: [alerts]
+      summary: Semua alert termasuk DRAFT/CLOSED
+      operationId: GETAdminAlerts
+      description: "Semua alert termasuk DRAFT/CLOSED"
+      x-permission: alert.create
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AlertStatus' }
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [alerts]
+      summary: Buat alert
+      operationId: POSTAdminAlerts
+      description: "Buat alert"
+      x-permission: alert.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, level, title, body]
+              properties:
+                category: { type: string }
+                level: { $ref: '#/components/schemas/AlertLevel' }
+                title: { type: string }
+                body: { type: string }
+                instruction: { type: string }
+                regionIds: { type: array, items: { type: string } }
+                area: { type: object, description: GeoJSON MultiPolygon }
+                deliveryMode: { $ref: '#/components/schemas/DeliveryMode' }
+                startsAt: { type: string, format: date-time }
+                expiresAt: { type: string, format: date-time }
+                publish: { type: boolean }
+      responses:
+        '201': { description: Dibuat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/alerts/{id}:
+    patch:
+      tags: [alerts]
+      summary: Ubah alert DRAFT
+      operationId: PATCHAdminAlertsId
+      description: "Ubah alert DRAFT"
+      x-permission: alert.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                body: { type: string }
+                instruction: { type: string }
+                level: { $ref: '#/components/schemas/AlertLevel' }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/alerts/{id}/publish:
+    post:
+      tags: [alerts]
+      summary: DRAFT → ACTIVE (kirim ke topic/geofence)
+      operationId: POSTAdminAlertsIdPublish
+      description: "DRAFT → ACTIVE (kirim ke topic/geofence)"
+      x-permission: alert.create
+      x-audit: alert.publish
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Diterbitkan }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/alerts/{id}/close:
+    post:
+      tags: [alerts]
+      summary: ACTIVE → CLOSED (notifikasi pembaruan)
+      operationId: POSTAdminAlertsIdClose
+      description: "ACTIVE → CLOSED (notifikasi pembaruan)"
+      x-permission: alert.close
+      x-audit: alert.close
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Ditutup }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /condition-reports:
+    get:
+      tags: [alerts]
+      summary: Peta laporan kondisi (ringkas)
+      operationId: GETConditionReports
+      description: "Peta laporan kondisi (ringkas)"
+      x-permission: condition_report.read
+      parameters:
+        - name: bbox
+          in: query
+          description: "minLng,minLat,maxLng,maxLat"
+          schema: { type: string }
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: typeCode
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ringkas untuk peta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ==== 5.10 Notifikasi in-app ====
+  /notifications:
+    get:
+      tags: [notifications]
+      summary: Riwayat notifikasi sendiri
+      operationId: GETNotifications
+      description: "Riwayat notifikasi sendiri"
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean }
+        - name: kind
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/unread-count:
+    get:
+      tags: [notifications]
+      summary: Jumlah belum dibaca
+      operationId: GETNotificationsUnreadCount
+      description: "Jumlah belum dibaca"
+      responses:
+        '200':
+          description: Jumlah
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          count: { type: integer }
+
+  /notifications/{id}/seen:
+    post:
+      tags: [notifications]
+      summary: Tandai dibaca
+      operationId: POSTNotificationsIdSeen
+      description: "Tandai dibaca"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notifications/seen-all:
+    post:
+      tags: [notifications]
+      summary: Tandai semua dibaca
+      operationId: POSTNotificationsSeenAll
+      description: "Tandai semua dibaca"
+      responses:
+        '204': { description: Berhasil }
+
+  /notifications/{id}/delivered:
+    post:
+      tags: [notifications]
+      summary: Ack push diterima (memutus retry)
+      operationId: POSTNotificationsIdDelivered
+      description: "Ack push diterima (memutus retry)"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil }
+
+  # ==== 5.11 Shift dan dashboard ====
+  /shifts/start:
+    post:
+      tags: [shifts]
+      summary: Mulai shift
+      operationId: POSTShiftsStart
+      description: "Mulai shift"
+      x-permission: shift.manage
+      responses:
+        '201': { description: Mulai }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /shifts/end:
+    post:
+      tags: [shifts]
+      summary: Akhiri shift (melepas kunci milik pengguna)
+      operationId: POSTShiftsEnd
+      description: "Akhiri shift (melepas kunci milik pengguna)"
+      x-permission: shift.manage
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                handoverNote: { type: string }
+                handedOverTo: { type: string, format: uuid }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /shifts/current:
+    get:
+      tags: [shifts]
+      summary: Shift aktif
+      operationId: GETShiftsCurrent
+      description: "Shift aktif"
+      x-permission: shift.manage
+      responses:
+        '200':
+          description: Shift
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /shifts/handover:
+    get:
+      tags: [shifts]
+      summary: Ringkasan serah terima
+      operationId: GETShiftsHandover
+      description: "Ringkasan serah terima"
+      x-permission: shift.manage
+      responses:
+        '200':
+          description: Ringkasan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /dashboard/summary:
+    get:
+      tags: [dashboard]
+      summary: Hitungan ringkas dashboard
+      operationId: GETDashboardSummary
+      description: "Hitungan ringkas dashboard"
+      x-permission: dashboard.read
+      responses:
+        '200':
+          description: Ringkasan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          incidentsByStatus: { type: object }
+                          activeDispatches: { type: integer }
+                          pendingOffers: { type: integer }
+                          availableUnits: { type: integer }
+                          avgResponseTimeSeconds: { type: [number, 'null'] }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ==== 5.13 Sinkronisasi ====
+  /sync/snapshot:
+    get:
+      tags: [sync]
+      summary: Kondisi terkini sesuai role
+      operationId: GETSyncSnapshot
+      description: "Kondisi terkini sesuai role"
+      responses:
+        '200':
+          description: Snapshot
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          lastEventId: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /sync/events:
+    get:
+      tags: [sync]
+      summary: Event setelah afterId (disaring visibility)
+      operationId: GETSyncEvents
+      description: "Event setelah afterId (disaring visibility)"
+      parameters:
+        - name: afterId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        '200':
+          description: Event
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, lastId, hasMore, resetRequired]
+                properties:
+                  data: { type: array, items: { type: object } }
+                  lastId: { type: string }
+                  hasMore: { type: boolean }
+                  resetRequired: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ==== 5.12 Administrasi organisasi, staf, role, pengaturan, audit ====
+  /organizations:
+    get:
+      tags: [admin]
+      summary: Daftar organisasi
+      operationId: GETOrganizations
+      description: "Daftar organisasi"
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/OrganizationType' }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [admin]
+      summary: Buat organisasi
+      operationId: POSTOrganizations
+      description: "Buat organisasi"
+      x-permission: org.manage_all
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: { type: string }
+                type: { $ref: '#/components/schemas/OrganizationType' }
+                phone: { type: string }
+      responses:
+        '201': { description: Dibuat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /organizations/{id}:
+    patch:
+      tags: [admin]
+      summary: Ubah data organisasi
+      operationId: PATCHOrganizationsId
+      description: "Ubah data organisasi"
+      x-permission: org.manage_all
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                phone: { type: string }
+                active: { type: boolean }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /organizations/{id}/service-areas:
+    put:
+      tags: [admin]
+      summary: Ganti area layanan organisasi
+      operationId: PUTOrganizationsIdServiceAreas
+      description: "Ganti area layanan organisasi"
+      x-permission: org.manage_all
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [regionIds]
+              properties:
+                regionIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /organizations/{id}/units:
+    get:
+      tags: [admin]
+      summary: Daftar unit organisasi
+      operationId: GETOrganizationsIdUnits
+      description: "Daftar unit organisasi"
+      x-permission: org.manage_own
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      summary: Buat unit
+      operationId: POSTOrganizationsIdUnits
+      description: "Buat unit"
+      x-permission: org.manage_own
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: { type: string }
+                type: { type: string }
+      responses:
+        '201': { description: Dibuat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /units/{id}:
+    patch:
+      tags: [admin]
+      summary: Ubah unit
+      operationId: PATCHUnitsId
+      description: "Ubah unit"
+      x-permission: org.manage_own
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                type: { type: string }
+                active: { type: boolean }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /organizations/{id}/staff:
+    get:
+      tags: [admin]
+      summary: Daftar staf organisasi
+      operationId: GETOrganizationsIdStaff
+      description: "Daftar staf organisasi"
+      x-permission: staff.manage_own
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [admin]
+      summary: Buat akun staf
+      operationId: POSTOrganizationsIdStaff
+      description: "Buat akun staf"
+      x-permission: staff.manage_own
+      x-audit: staff.create
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phone, roleCodes]
+              properties:
+                fullName: { type: string }
+                phone: { type: string }
+                email: { type: string }
+                roleCodes: { type: array, items: { type: string } }
+                unitId: { type: [string, 'null'], format: uuid }
+      responses:
+        '201': { description: Dibuat }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /staff/{userId}:
+    patch:
+      tags: [admin]
+      summary: Ubah unit/role staf
+      operationId: PATCHStaffUserId
+      description: "Ubah unit/role staf"
+      x-permission: staff.manage_own
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unitId: { type: [string, 'null'], format: uuid }
+                roleCodes: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /staff/{userId}/deactivate:
+    post:
+      tags: [admin]
+      summary: Nonaktifkan staf
+      operationId: POSTStaffUserIdDeactivate
+      description: "Nonaktifkan staf"
+      x-permission: staff.manage_own
+      x-audit: staff.deactivate
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Dinonaktifkan }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /staff/{userId}/reset-password:
+    post:
+      tags: [admin]
+      summary: Setel ulang kata sandi
+      operationId: POSTStaffUserIdResetPassword
+      description: "Setel ulang kata sandi"
+      x-permission: staff.manage_own
+      x-audit: staff.reset_password
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Direset }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users:
+    get:
+      tags: [admin]
+      summary: Semua pengguna
+      operationId: GETUsers
+      description: "Semua pengguna"
+      x-permission: staff.manage_all
+      parameters:
+        - name: userType
+          in: query
+          schema: { type: string, enum: [CITIZEN, STAFF] }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/UserStatus' }
+        - name: q
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /users/{id}/status:
+    patch:
+      tags: [admin]
+      summary: Ubah status pengguna
+      operationId: PATCHUsersIdStatus
+      description: "Ubah status pengguna"
+      x-permission: staff.manage_all
+      x-audit: user.role_change
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/UserStatus' }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /roles:
+    get:
+      tags: [admin]
+      summary: Daftar role
+      operationId: GETRoles
+      description: "Daftar role"
+      x-permission: role.manage
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /permissions:
+    get:
+      tags: [admin]
+      summary: Daftar permission
+      operationId: GETPermissions
+      description: "Daftar permission"
+      x-permission: role.manage
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /roles/{id}/permissions:
+    put:
+      tags: [admin]
+      summary: Ganti permission role
+      operationId: PUTRolesIdPermissions
+      description: "Ganti permission role"
+      x-permission: role.manage
+      x-audit: role.permissions_change
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionCodes]
+              properties:
+                permissionCodes: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /users/{id}/roles:
+    put:
+      tags: [admin]
+      summary: Ganti role pengguna
+      operationId: PUTUsersIdRoles
+      description: "Ganti role pengguna"
+      x-permission: staff.manage_all
+      x-audit: user.role_change
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleCodes]
+              properties:
+                roleCodes: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /audit-logs:
+    get:
+      tags: [admin]
+      summary: Log audit
+      operationId: GETAuditLogs
+      description: "Log audit"
+      parameters:
+        - name: entityType
+          in: query
+          schema: { type: string }
+        - name: entityId
+          in: query
+          schema: { type: string }
+        - name: actorUserId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: Daftar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /settings:
+    get:
+      tags: [admin]
+      summary: Semua pengaturan
+      operationId: GETSettings
+      description: "Semua pengaturan"
+      x-permission: settings.manage
+      responses:
+        '200':
+          description: Pengaturan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /settings/{key}:
+    put:
+      tags: [admin]
+      summary: Ubah satu pengaturan
+      operationId: PUTSettingsKey
+      description: "Ubah satu pengaturan"
+      x-permission: settings.manage
+      x-audit: settings.change
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: {}
+      responses:
+        '200': { description: Berhasil }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }

@@ -33,7 +33,11 @@ lint:
 	@echo "lint selesai."
 
 contract:
-	@echo "contract: openapi/asyncapi belum dibuat (Fase 0b-0c). Akan diperbarui."
+	@echo "==> spectral lint (openapi.yaml)"
+	npx --yes @stoplight/spectral-cli lint contracts/openapi.yaml --ruleset contracts/.spectral.yaml
+	@echo "==> cakupan endpoint (dokumen <-> kontrak)"
+	python3 contracts/scripts/check-coverage.py
+	@echo "contract OK."
 
 demo-bots:
 	@echo "demo-bots: belum diimplementasikan (Fase 6)."
