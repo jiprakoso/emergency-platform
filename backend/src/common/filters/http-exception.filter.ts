@@ -1,7 +1,13 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ErrorEnvelope } from '../envelope';
+import { ErrorDetail, ErrorEnvelope } from '../envelope';
 import { ErrorCodes } from '../errors/error-codes';
+
+type HttpExceptionResponse = {
+  code?: string;
+  message?: string;
+  details?: ErrorDetail[];
+};
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -11,19 +17,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let code = ErrorCodes.INTERNAL_ERROR;
+    let code: string = ErrorCodes.INTERNAL_ERROR;
     let message = 'Terjadi kesalahan internal';
-    let details: any[] | undefined;
+    let details: ErrorDetail[] | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
-      const res = exception.getResponse() as any;
-      if (typeof res === 'object') {
-        code = res.code || code;
-        message = res.message || message;
-        details = res.details;
+      const res: unknown = exception.getResponse();
+      if (typeof res === 'object' && res !== null) {
+        const body = res as HttpExceptionResponse;
+        code = body.code || code;
+        message = body.message || message;
+        details = body.details;
       } else {
-        message = res || message;
+        message = (res as string) || message;
       }
     }
 

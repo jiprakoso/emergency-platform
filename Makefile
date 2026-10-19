@@ -26,7 +26,11 @@ test:
 	@echo "test: belum diimplementasikan (Fase 1)."
 
 lint:
-	@echo "lint: backend/dashboard belum diinisialisasi (Fase 0a). Akan diperbarui setelah inisialisasi."
+	@echo "==> lint backend"
+	cd backend && corepack pnpm lint
+	@echo "==> lint dashboard"
+	cd dashboard && corepack pnpm lint
+	@echo "lint selesai."
 
 contract:
 	@echo "contract: openapi/asyncapi belum dibuat (Fase 0b-0c). Akan diperbarui."
