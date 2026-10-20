@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "code": "TRAFFIC_ACCIDENT",
+      "name": "Kecelakaan Lalu Lintas",
+      "category": "TRAFFIC"
+    },
+    {
+      "code": "FIRE",
+      "name": "Kebakaran",
+      "category": "FIRE"
+    },
+    {
+      "code": "FLOOD",
+      "name": "Banjir",
+      "category": "NATURAL_DISASTER"
+    },
+    {
+      "code": "MEDICAL",
+      "name": "Darurat Medis",
+      "category": "MEDICAL"
+    },
+    {
+      "code": "OTHER",
+      "name": "Lainnya",
+      "category": "OTHER"
+    }
+  ]
+}

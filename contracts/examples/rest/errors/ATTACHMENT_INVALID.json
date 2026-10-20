@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "ATTACHMENT_INVALID",
+    "message": "Lampiran tidak valid.",
+    "requestId": "a1b2c3"
+  }
+}

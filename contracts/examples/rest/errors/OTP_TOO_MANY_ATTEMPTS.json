@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "OTP_TOO_MANY_ATTEMPTS",
+    "message": "Terlalu banyak percobaan kode OTP.",
+    "requestId": "a1b2c3"
+  }
+}

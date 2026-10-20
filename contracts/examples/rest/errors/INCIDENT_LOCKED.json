@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "INCIDENT_LOCKED",
+    "message": "Incident sedang dikunci oleh pengguna lain.",
+    "requestId": "a1b2c3"
+  }
+}

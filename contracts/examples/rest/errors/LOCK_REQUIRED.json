@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "LOCK_REQUIRED",
+    "message": "Aksi ini memerlukan kunci incident.",
+    "requestId": "a1b2c3"
+  }
+}

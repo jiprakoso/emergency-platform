@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "UNIT_NOT_AVAILABLE",
+    "message": "Unit tidak tersedia.",
+    "requestId": "a1b2c3"
+  }
+}

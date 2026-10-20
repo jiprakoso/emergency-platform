@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "ACTIVE_DISPATCHES_EXIST",
+    "message": "Masih ada dispatch aktif untuk organisasi ini.",
+    "requestId": "a1b2c3"
+  }
+}

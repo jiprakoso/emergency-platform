@@ -1,0 +1,16 @@
+{
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2NjY2NjY2Ni02NjYtNDY2Ni04NjY2LTY2NjY2NjY2NjY2Iiwic2lkIjoiNzc3Nzc3NzctNzc3Ny00Nzc3LTg3NzctNzc3Nzc3Nzc3NzcxIn0.sampel-signature-bukan-token-nyata",
+    "accessTokenExpiresIn": 900,
+    "refreshToken": "sampel-refresh-token-2026-opaque",
+    "refreshTokenExpiresIn": 43200,
+    "user": {
+      "id": "66666666-6666-4666-8666-666666666602",
+      "userType": "STAFF",
+      "fullName": "Dispatcher Rina",
+      "roles": [
+        "DISPATCHER"
+      ]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "OCCURRED_AT_OUT_OF_RANGE",
+    "message": "Waktu kejadian di luar rentang yang diizinkan.",
+    "requestId": "a1b2c3"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "id": "44444444-4444-4444-8444-444444444401",
+      "name": "Ambulans 02 (Tengah)",
+      "status": "AVAILABLE"
+    },
+    {
+      "id": "44444444-4444-4444-8444-444444444402",
+      "name": "Patroli 01",
+      "status": "BUSY"
+    },
+    {
+      "id": "44444444-4444-4444-8444-444444444403",
+      "name": "Mobil Pemadam Pos Utara",
+      "status": "OFFLINE"
+    },
+    {
+      "id": "44444444-4444-4444-8444-444444444404",
+      "name": "Tim Reaksi Cepat 01",
+      "status": "OUT_OF_SERVICE"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

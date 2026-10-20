@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "id": "33333333-3333-4333-8333-333333333301",
+      "at": "2026-10-05T03:15:00Z",
+      "text": "Laporan diterima.",
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "33333333-3333-4333-8333-333333333302",
+      "at": "2026-10-05T03:20:00Z",
+      "text": "Unit menuju lokasi.",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

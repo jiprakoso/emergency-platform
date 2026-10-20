@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "id": "66666666-6666-4666-8666-666666666602",
+      "fullName": "Dispatcher Rina",
+      "userType": "STAFF",
+      "roles": [
+        "DISPATCHER"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": "66666666-6666-4666-8666-666666666605",
+      "fullName": "Contoh Ditangguhkan",
+      "userType": "STAFF",
+      "roles": [
+        "RESPONDER"
+      ],
+      "status": "SUSPENDED"
+    },
+    {
+      "id": "66666666-6666-4666-8666-666666666606",
+      "fullName": "Contoh Dinonaktifkan",
+      "userType": "STAFF",
+      "roles": [
+        "RESPONDER"
+      ],
+      "status": "DEACTIVATED"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

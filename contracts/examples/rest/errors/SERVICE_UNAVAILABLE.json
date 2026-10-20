@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "Layanan sedang tidak tersedia.",
+    "requestId": "a1b2c3"
+  }
+}

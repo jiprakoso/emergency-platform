@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Terlalu banyak permintaan, coba lagi nanti.",
+    "requestId": "a1b2c3"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "data": [
+    {
+      "code": "99.99.01",
+      "name": "Kec. Sinar",
+      "level": "DISTRICT",
+      "centroid": {
+        "lat": -7.225,
+        "lng": 112.725
+      }
+    },
+    {
+      "code": "99.99.02",
+      "name": "Kec. Bukit",
+      "level": "DISTRICT",
+      "centroid": {
+        "lat": -7.275,
+        "lng": 112.725
+      }
+    },
+    {
+      "code": "99.99.03",
+      "name": "Kec. Muara",
+      "level": "DISTRICT",
+      "centroid": {
+        "lat": -7.325,
+        "lng": 112.725
+      }
+    },
+    {
+      "code": "99.99.01.1001",
+      "name": "Kel. Mawar",
+      "level": "VILLAGE",
+      "centroid": {
+        "lat": -7.225,
+        "lng": 112.6875
+      }
+    },
+    {
+      "code": "99.99.02.1001",
+      "name": "Kel. Anggrek",
+      "level": "VILLAGE",
+      "centroid": {
+        "lat": -7.275,
+        "lng": 112.6875
+      }
+    },
+    {
+      "code": "99.99.03.1001",
+      "name": "Kel. Pesisir",
+      "level": "VILLAGE",
+      "centroid": {
+        "lat": -7.325,
+        "lng": 112.6875
+      }
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

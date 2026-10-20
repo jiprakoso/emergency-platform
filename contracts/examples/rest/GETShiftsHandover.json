@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "shiftId": "77777777-7777-4777-8777-777777777751",
+      "endedAt": "2026-10-04T08:00:00Z",
+      "endedBy": {
+        "id": "66666666-6666-4666-8666-666666666602",
+        "fullName": "Dispatcher Rina"
+      },
+      "note": "Serah terima malam, tanpa insiden terbuka."
+    }
+  ]
+}

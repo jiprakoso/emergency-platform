@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Data tidak ditemukan.",
+    "requestId": "a1b2c3"
+  }
+}

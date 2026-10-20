@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "REFRESH_TOKEN_REUSED",
+    "message": "Refresh token sudah dipakai sebelumnya, seluruh sesi dicabut.",
+    "requestId": "a1b2c3"
+  }
+}

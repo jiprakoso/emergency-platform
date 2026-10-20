@@ -1,0 +1,6 @@
+{
+  "data": {
+    "secret": "JBSWY3DPEHPK3PXP",
+    "otpauthUri": "otpauth://totp/Emergency%20Platform?secret=JBSWY3DPEHPK3PXP&issuer=EmergencyPlatform"
+  }
+}

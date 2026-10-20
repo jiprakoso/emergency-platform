@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "OTP_EXPIRED",
+    "message": "Kode OTP sudah kedaluwarsa.",
+    "requestId": "a1b2c3"
+  }
+}

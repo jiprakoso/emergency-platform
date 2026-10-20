@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "66666666-6666-4666-8666-666666666603",
+      "fullName": "Paramedis Joko",
+      "roles": [
+        "RESPONDER"
+      ],
+      "status": "ACTIVE"
+    },
+    {
+      "id": "66666666-6666-4666-8666-666666666604",
+      "fullName": "Paramedis Indra",
+      "roles": [
+        "RESPONDER"
+      ],
+      "status": "ACTIVE"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

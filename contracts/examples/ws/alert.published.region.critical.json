@@ -1,0 +1,30 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "alert.published",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "CRITICAL",
+  "ackRequired": false,
+  "data": {
+    "alert": {
+      "id": "99999999-9999-4999-8999-999999999901",
+      "category": "BANJIR",
+      "level": "INFO",
+      "status": "ACTIVE",
+      "title": "Cuaca buruk di Kec. Sinar",
+      "body": "Hujan lebat diperkirakan sampai sore.",
+      "instruction": "Hindari genangan dan ikuti arahan petugas.",
+      "deliveryMode": "REGION_TOPIC",
+      "regionIds": [
+        "99.99.03"
+      ],
+      "startsAt": "2026-10-05T01:00:00Z",
+      "expiresAt": "2026-10-05T07:00:00Z",
+      "createdAt": "2026-10-05T01:00:00Z"
+    }
+  }
+}

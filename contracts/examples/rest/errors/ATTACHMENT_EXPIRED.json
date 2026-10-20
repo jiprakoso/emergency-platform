@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "ATTACHMENT_EXPIRED",
+    "message": "Tautan lampiran sudah kedaluwarsa.",
+    "requestId": "a1b2c3"
+  }
+}

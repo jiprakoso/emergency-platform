@@ -1,0 +1,18 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "notification.created",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "INFO",
+  "ackRequired": false,
+  "data": {
+    "notificationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+    "kind": "DISPATCH_OFFER",
+    "title": "Penugasan baru",
+    "unreadCount": 3
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "data": {
+    "offer_timeout_seconds": 120,
+    "offer_unseen_seconds": 60,
+    "incident_lock_seconds": 300,
+    "auto_close_hours": 24,
+    "min_app_version": "1.0.0",
+    "sample_mode": true
+  }
+}

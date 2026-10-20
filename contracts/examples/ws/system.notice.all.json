@@ -1,0 +1,16 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": null,
+  "type": "system.notice",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "INFO",
+  "ackRequired": false,
+  "data": {
+    "level": "INFO",
+    "message": "Pemeliharaan terjadwal pukul 02.00 WIB."
+  }
+}

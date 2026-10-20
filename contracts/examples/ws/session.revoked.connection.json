@@ -1,0 +1,15 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "session.revoked",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "INFO",
+  "ackRequired": false,
+  "data": {
+    "reason": "REFRESH_REUSE"
+  }
+}

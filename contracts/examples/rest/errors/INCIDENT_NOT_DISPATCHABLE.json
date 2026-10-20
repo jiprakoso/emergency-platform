@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "INCIDENT_NOT_DISPATCHABLE",
+    "message": "Status incident tidak dapat didispatch.",
+    "requestId": "a1b2c3"
+  }
+}

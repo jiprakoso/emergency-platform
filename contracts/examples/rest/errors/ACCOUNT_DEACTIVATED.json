@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "ACCOUNT_DEACTIVATED",
+    "message": "Akun dinonaktifkan.",
+    "requestId": "a1b2c3"
+  }
+}

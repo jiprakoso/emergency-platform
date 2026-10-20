@@ -1,0 +1,4 @@
+{
+  "expiresInSeconds": 180,
+  "resendAfterSeconds": 60
+}

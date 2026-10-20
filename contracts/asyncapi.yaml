@@ -1,0 +1,1929 @@
+asyncapi: 3.1.0
+info:
+  title: Emergency Platform Realtime
+  version: 1.0.0
+  description: 'Kontrak WebSocket (Socket.IO namespace /realtime) untuk aplikasi sampel.
+
+    Acuan: docs/specs/websocket-aplikasi-darurat.md §5-6.
+
+    REST adalah satu-satunya jalur tulis; WebSocket hanya mengantar event.
+
+    At-least-once: klien membuang duplikat dengan `eid`.'
+  contact:
+    name: Emergency Platform
+    url: https://github.com/jiprakoso/emergency-platform
+  license:
+    name: UNLICENSED
+  tags:
+  - name: incident
+    description: Event kejadian (kepada dispatcher dan pihak terkait)
+  - name: dispatch
+    description: Event penugasan responder
+  - name: resource
+    description: Event resource request
+  - name: report
+    description: Event status laporan warga
+  - name: alert
+    description: Event peringatan bencana
+  - name: unit
+    description: Event unit dan lokasi
+  - name: system
+    description: Event sistem dan sesi
+  - name: client
+    description: Perintah klien -> server (bukan jalur tulis data domain)
+defaultContentType: application/json
+servers:
+  development:
+    host: localhost:3000
+    pathname: /realtime
+    protocol: socketio
+    protocolVersion: '4'
+    description: Dev (ws, fallback polling)
+channels:
+  realtime:
+    address: /realtime
+    title: Realtime
+    description: Satu namespace Socket.IO. Server mengatur room; klien tidak join sembarang.
+    messages:
+      ConnectionReady:
+        $ref: '#/components/messages/ConnectionReady'
+      AuthExpiring:
+        $ref: '#/components/messages/AuthExpiring'
+      AuthExpired:
+        $ref: '#/components/messages/AuthExpired'
+      SessionRevoked:
+        $ref: '#/components/messages/SessionRevoked'
+      SystemNotice:
+        $ref: '#/components/messages/SystemNotice'
+      IncidentCreated:
+        $ref: '#/components/messages/IncidentCreated'
+      IncidentReportAdded:
+        $ref: '#/components/messages/IncidentReportAdded'
+      IncidentUpdated:
+        $ref: '#/components/messages/IncidentUpdated'
+      IncidentLocationUpdated:
+        $ref: '#/components/messages/IncidentLocationUpdated'
+      IncidentStatusChanged:
+        $ref: '#/components/messages/IncidentStatusChanged'
+      IncidentLocked:
+        $ref: '#/components/messages/IncidentLocked'
+      IncidentUnlocked:
+        $ref: '#/components/messages/IncidentUnlocked'
+      IncidentLockOverridden:
+        $ref: '#/components/messages/IncidentLockOverridden'
+      IncidentMerged:
+        $ref: '#/components/messages/IncidentMerged'
+      IncidentLeadChanged:
+        $ref: '#/components/messages/IncidentLeadChanged'
+      IncidentCasualtiesUpdated:
+        $ref: '#/components/messages/IncidentCasualtiesUpdated'
+      IncidentMilestoneRecorded:
+        $ref: '#/components/messages/IncidentMilestoneRecorded'
+      IncidentNoteAdded:
+        $ref: '#/components/messages/IncidentNoteAdded'
+      DispatchOffered:
+        $ref: '#/components/messages/DispatchOffered'
+      DispatchNotified:
+        $ref: '#/components/messages/DispatchNotified'
+      DispatchCreated:
+        $ref: '#/components/messages/DispatchCreated'
+      DispatchAccepted:
+        $ref: '#/components/messages/DispatchAccepted'
+      DispatchRejected:
+        $ref: '#/components/messages/DispatchRejected'
+      DispatchExpired:
+        $ref: '#/components/messages/DispatchExpired'
+      DispatchCancelled:
+        $ref: '#/components/messages/DispatchCancelled'
+      DispatchSelfInitiated:
+        $ref: '#/components/messages/DispatchSelfInitiated'
+      DispatchStatusChanged:
+        $ref: '#/components/messages/DispatchStatusChanged'
+      DispatchOfferUnseen:
+        $ref: '#/components/messages/DispatchOfferUnseen'
+      ResourceRequestCreated:
+        $ref: '#/components/messages/ResourceRequestCreated'
+      ResourceRequestDecided:
+        $ref: '#/components/messages/ResourceRequestDecided'
+      ReportStatusChanged:
+        $ref: '#/components/messages/ReportStatusChanged'
+      ReportTimelineUpdated:
+        $ref: '#/components/messages/ReportTimelineUpdated'
+      AlertPublished:
+        $ref: '#/components/messages/AlertPublished'
+      AlertUpdated:
+        $ref: '#/components/messages/AlertUpdated'
+      AlertClosed:
+        $ref: '#/components/messages/AlertClosed'
+      NotificationCreated:
+        $ref: '#/components/messages/NotificationCreated'
+      UnitStatusChanged:
+        $ref: '#/components/messages/UnitStatusChanged'
+      UnitLocationUpdated:
+        $ref: '#/components/messages/UnitLocationUpdated'
+      AckCommand:
+        $ref: '#/components/messages/AckCommand'
+      AuthRefreshCommand:
+        $ref: '#/components/messages/AuthRefreshCommand'
+      AppStateCommand:
+        $ref: '#/components/messages/AppStateCommand'
+      UnitLocationCommand:
+        $ref: '#/components/messages/UnitLocationCommand'
+operations:
+  receiveServerEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/realtime'
+    summary: Menerima event server -> klien
+    description: Server mengirim event satu arah dengan amplop standar (eid, id, type, v, ts, class, ackRequired, data). At-least-once;
+      klien membuang duplikat dengan eid dan membalas ack bila ackRequired.
+    messages:
+    - $ref: '#/channels/realtime/messages/ConnectionReady'
+    - $ref: '#/channels/realtime/messages/AuthExpiring'
+    - $ref: '#/channels/realtime/messages/AuthExpired'
+    - $ref: '#/channels/realtime/messages/SessionRevoked'
+    - $ref: '#/channels/realtime/messages/SystemNotice'
+    - $ref: '#/channels/realtime/messages/IncidentCreated'
+    - $ref: '#/channels/realtime/messages/IncidentReportAdded'
+    - $ref: '#/channels/realtime/messages/IncidentUpdated'
+    - $ref: '#/channels/realtime/messages/IncidentLocationUpdated'
+    - $ref: '#/channels/realtime/messages/IncidentStatusChanged'
+    - $ref: '#/channels/realtime/messages/IncidentLocked'
+    - $ref: '#/channels/realtime/messages/IncidentUnlocked'
+    - $ref: '#/channels/realtime/messages/IncidentLockOverridden'
+    - $ref: '#/channels/realtime/messages/IncidentMerged'
+    - $ref: '#/channels/realtime/messages/IncidentLeadChanged'
+    - $ref: '#/channels/realtime/messages/IncidentCasualtiesUpdated'
+    - $ref: '#/channels/realtime/messages/IncidentMilestoneRecorded'
+    - $ref: '#/channels/realtime/messages/IncidentNoteAdded'
+    - $ref: '#/channels/realtime/messages/DispatchOffered'
+    - $ref: '#/channels/realtime/messages/DispatchNotified'
+    - $ref: '#/channels/realtime/messages/DispatchCreated'
+    - $ref: '#/channels/realtime/messages/DispatchAccepted'
+    - $ref: '#/channels/realtime/messages/DispatchRejected'
+    - $ref: '#/channels/realtime/messages/DispatchExpired'
+    - $ref: '#/channels/realtime/messages/DispatchCancelled'
+    - $ref: '#/channels/realtime/messages/DispatchSelfInitiated'
+    - $ref: '#/channels/realtime/messages/DispatchStatusChanged'
+    - $ref: '#/channels/realtime/messages/DispatchOfferUnseen'
+    - $ref: '#/channels/realtime/messages/ResourceRequestCreated'
+    - $ref: '#/channels/realtime/messages/ResourceRequestDecided'
+    - $ref: '#/channels/realtime/messages/ReportStatusChanged'
+    - $ref: '#/channels/realtime/messages/ReportTimelineUpdated'
+    - $ref: '#/channels/realtime/messages/AlertPublished'
+    - $ref: '#/channels/realtime/messages/AlertUpdated'
+    - $ref: '#/channels/realtime/messages/AlertClosed'
+    - $ref: '#/channels/realtime/messages/NotificationCreated'
+    - $ref: '#/channels/realtime/messages/UnitStatusChanged'
+    - $ref: '#/channels/realtime/messages/UnitLocationUpdated'
+  sendClientCommands:
+    action: send
+    channel:
+      $ref: '#/channels/realtime'
+    summary: Mengirim perintah klien -> server
+    description: 'Empat perintah satu-satunya yang dikirim klien ke server: ack, auth.refresh, app.state, unit.location. Semua
+      divalidasi DTO, dibatasi laju, dan tidak pernah mengubah data domain (REST tetap satu-satunya jalur tulis).'
+    messages:
+    - $ref: '#/channels/realtime/messages/AckCommand'
+    - $ref: '#/channels/realtime/messages/AuthRefreshCommand'
+    - $ref: '#/channels/realtime/messages/AppStateCommand'
+    - $ref: '#/channels/realtime/messages/UnitLocationCommand'
+components:
+  messages:
+    ConnectionReady:
+      name: connection.ready
+      title: connection.ready
+      description: 'Server -> klien. Audiens: connection. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: connection.ready
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/ConnectionReadyData'
+      x-rooms:
+      - connection
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    AuthExpiring:
+      name: auth.expiring
+      title: auth.expiring
+      description: 'Server -> klien. Audiens: connection. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: auth.expiring
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/AuthExpiringData'
+      x-rooms:
+      - connection
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    AuthExpired:
+      name: auth.expired
+      title: auth.expired
+      description: 'Server -> klien. Audiens: connection. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: auth.expired
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              type: object
+              additionalProperties: false
+      x-rooms:
+      - connection
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    SessionRevoked:
+      name: session.revoked
+      title: session.revoked
+      description: 'Server -> klien. Audiens: connection. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: session.revoked
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/SessionRevokedData'
+      x-rooms:
+      - connection
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+      x-fcm: SESSION_REVOKED
+    SystemNotice:
+      name: system.notice
+      title: system.notice
+      description: 'Server -> klien. Audiens: *. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: system.notice
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/SystemNoticeData'
+      x-rooms:
+      - '*'
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    IncidentCreated:
+      name: incident.created
+      title: incident.created
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.created
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentCreatedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentReportAdded:
+      name: incident.report_added
+      title: incident.report_added
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.report_added
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentReportAddedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentUpdated:
+      name: incident.updated
+      title: incident.updated
+      description: 'Server -> klien. Audiens: role:dispatcher, incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.updated
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentUpdatedData'
+      x-rooms:
+      - role:dispatcher
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentLocationUpdated:
+      name: incident.location_updated
+      title: incident.location_updated
+      description: 'Server -> klien. Audiens: incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.location_updated
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentLocationUpdatedData'
+      x-rooms:
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentStatusChanged:
+      name: incident.status_changed
+      title: incident.status_changed
+      description: 'Server -> klien. Audiens: role:dispatcher, incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.status_changed
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentStatusChangedData'
+      x-rooms:
+      - role:dispatcher
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentLocked:
+      name: incident.locked
+      title: incident.locked
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.locked
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentLockedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentUnlocked:
+      name: incident.unlocked
+      title: incident.unlocked
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.unlocked
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentLockedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentLockOverridden:
+      name: incident.lock_overridden
+      title: incident.lock_overridden
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.lock_overridden
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentLockOverriddenData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentMerged:
+      name: incident.merged
+      title: incident.merged
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.merged
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentMergedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentLeadChanged:
+      name: incident.lead_changed
+      title: incident.lead_changed
+      description: 'Server -> klien. Audiens: role:dispatcher, incident:{id}, org:{newLead}, org:{oldLead}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.lead_changed
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentLeadChangedData'
+      x-rooms:
+      - role:dispatcher
+      - incident:{id}
+      - org:{newLead}
+      - org:{oldLead}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentCasualtiesUpdated:
+      name: incident.casualties_updated
+      title: incident.casualties_updated
+      description: 'Server -> klien. Audiens: role:dispatcher, incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.casualties_updated
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentCasualtiesUpdatedData'
+      x-rooms:
+      - role:dispatcher
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentMilestoneRecorded:
+      name: incident.milestone_recorded
+      title: incident.milestone_recorded
+      description: 'Server -> klien. Audiens: role:dispatcher, incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.milestone_recorded
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentMilestoneRecordedData'
+      x-rooms:
+      - role:dispatcher
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    IncidentNoteAdded:
+      name: incident.note_added
+      title: incident.note_added
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: incident.note_added
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/IncidentNoteAddedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    DispatchOffered:
+      name: dispatch.offered
+      title: dispatch.offered
+      description: 'Server -> klien. Audiens: unit:{id}, org:{id}, user:{id}. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.offered
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: true
+            data:
+              $ref: '#/components/schemas/DispatchOfferedData'
+      x-rooms:
+      - unit:{id}
+      - org:{id}
+      - user:{id}
+      x-class: CRITICAL
+      x-ack-required: true
+      x-direction: s2c
+      x-fcm: DISPATCH_OFFER
+    DispatchNotified:
+      name: dispatch.notified
+      title: dispatch.notified
+      description: 'Server -> klien. Audiens: org:{id}. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.notified
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: true
+            data:
+              $ref: '#/components/schemas/DispatchNotifiedData'
+      x-rooms:
+      - org:{id}
+      x-class: CRITICAL
+      x-ack-required: true
+      x-direction: s2c
+      x-fcm: DISPATCH_NOTIFIED
+    DispatchCreated:
+      name: dispatch.created
+      title: dispatch.created
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.created
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchCreatedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    DispatchAccepted:
+      name: dispatch.accepted
+      title: dispatch.accepted
+      description: 'Server -> klien. Audiens: role:dispatcher, org:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.accepted
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchAcceptedData'
+      x-rooms:
+      - role:dispatcher
+      - org:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    DispatchRejected:
+      name: dispatch.rejected
+      title: dispatch.rejected
+      description: 'Server -> klien. Audiens: role:dispatcher, role:supervisor. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.rejected
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchRejectedData'
+      x-rooms:
+      - role:dispatcher
+      - role:supervisor
+      x-class: CRITICAL
+      x-ack-required: false
+      x-direction: s2c
+    DispatchExpired:
+      name: dispatch.expired
+      title: dispatch.expired
+      description: 'Server -> klien. Audiens: role:dispatcher, role:supervisor, org:{id}. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.expired
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchExpiredData'
+      x-rooms:
+      - role:dispatcher
+      - role:supervisor
+      - org:{id}
+      x-class: CRITICAL
+      x-ack-required: false
+      x-direction: s2c
+      x-fcm: DISPATCH_UPDATE
+    DispatchCancelled:
+      name: dispatch.cancelled
+      title: dispatch.cancelled
+      description: 'Server -> klien. Audiens: unit:{id}, org:{id}, role:dispatcher, incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.cancelled
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchCancelledData'
+      x-rooms:
+      - unit:{id}
+      - org:{id}
+      - role:dispatcher
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+      x-fcm: DISPATCH_UPDATE
+    DispatchSelfInitiated:
+      name: dispatch.self_initiated
+      title: dispatch.self_initiated
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.self_initiated
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchSelfInitiatedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: CRITICAL
+      x-ack-required: false
+      x-direction: s2c
+    DispatchStatusChanged:
+      name: dispatch.status_changed
+      title: dispatch.status_changed
+      description: 'Server -> klien. Audiens: role:dispatcher, incident:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.status_changed
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchStatusChangedData'
+      x-rooms:
+      - role:dispatcher
+      - incident:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    DispatchOfferUnseen:
+      name: dispatch.offer_unseen
+      title: dispatch.offer_unseen
+      description: 'Server -> klien. Audiens: role:dispatcher, role:supervisor. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: dispatch.offer_unseen
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/DispatchOfferUnseenData'
+      x-rooms:
+      - role:dispatcher
+      - role:supervisor
+      x-class: CRITICAL
+      x-ack-required: false
+      x-direction: s2c
+    ResourceRequestCreated:
+      name: resource_request.created
+      title: resource_request.created
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: CRITICAL.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: resource_request.created
+            class:
+              const: CRITICAL
+            ackRequired:
+              const: true
+            data:
+              $ref: '#/components/schemas/ResourceRequestCreatedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: CRITICAL
+      x-ack-required: true
+      x-direction: s2c
+    ResourceRequestDecided:
+      name: resource_request.decided
+      title: resource_request.decided
+      description: 'Server -> klien. Audiens: user:{requester}, org:{leadOrg}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: resource_request.decided
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/ResourceRequestDecidedData'
+      x-rooms:
+      - user:{requester}
+      - org:{leadOrg}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+    ReportStatusChanged:
+      name: report.status_changed
+      title: report.status_changed
+      description: 'Server -> klien. Audiens: user:{reporterId}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: report.status_changed
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/ReportStatusChangedData'
+      x-rooms:
+      - user:{reporterId}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+      x-fcm: REPORT_UPDATE
+    ReportTimelineUpdated:
+      name: report.timeline_updated
+      title: report.timeline_updated
+      description: 'Server -> klien. Audiens: user:{reporterId}. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: report.timeline_updated
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/ReportTimelineUpdatedData'
+      x-rooms:
+      - user:{reporterId}
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    AlertPublished:
+      name: alert.published
+      title: alert.published
+      description: 'Server -> klien. Audiens: region:{districtId}, user:{id}. Kelas: DYNAMIC.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: alert.published
+            class:
+              enum:
+              - CRITICAL
+              - STANDARD
+              description: 'Kelas dinamis: system_settings.alert_levels.fcm_class per level alert (level dengan fcm_class=CRITICAL
+                -> kelas CRITICAL; selain itu STANDARD).'
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/AlertPublishedData'
+      x-rooms:
+      - region:{districtId}
+      - user:{id}
+      x-class: DYNAMIC
+      x-ack-required: false
+      x-direction: s2c
+      x-class-note: 'Kelas dinamis: system_settings.alert_levels.fcm_class per level alert (level dengan fcm_class=CRITICAL
+        -> kelas CRITICAL; selain itu STANDARD).'
+      x-fcm: ALERT
+    AlertUpdated:
+      name: alert.updated
+      title: alert.updated
+      description: 'Server -> klien. Audiens: region:{districtId}, user:{id}. Kelas: STANDARD.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: alert.updated
+            class:
+              const: STANDARD
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/AlertUpdatedData'
+      x-rooms:
+      - region:{districtId}
+      - user:{id}
+      x-class: STANDARD
+      x-ack-required: false
+      x-direction: s2c
+      x-fcm: ALERT_UPDATE
+    AlertClosed:
+      name: alert.closed
+      title: alert.closed
+      description: 'Server -> klien. Audiens: region:{districtId}, user:{id}. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: alert.closed
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/AlertClosedData'
+      x-rooms:
+      - region:{districtId}
+      - user:{id}
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    NotificationCreated:
+      name: notification.created
+      title: notification.created
+      description: 'Server -> klien. Audiens: user:{id}. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: notification.created
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/NotificationCreatedData'
+      x-rooms:
+      - user:{id}
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    UnitStatusChanged:
+      name: unit.status_changed
+      title: unit.status_changed
+      description: 'Server -> klien. Audiens: role:dispatcher, org:{id}. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: unit.status_changed
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/UnitStatusChangedData'
+      x-rooms:
+      - role:dispatcher
+      - org:{id}
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    UnitLocationUpdated:
+      name: unit.location_updated
+      title: unit.location_updated
+      description: 'Server -> klien. Audiens: role:dispatcher. Kelas: INFO.'
+      payload:
+        allOf:
+        - $ref: '#/components/schemas/EventEnvelope'
+        - type: object
+          properties:
+            type:
+              const: unit.location_updated
+            class:
+              const: INFO
+            ackRequired:
+              const: false
+            data:
+              $ref: '#/components/schemas/UnitLocationUpdatedData'
+      x-rooms:
+      - role:dispatcher
+      x-class: INFO
+      x-ack-required: false
+      x-direction: s2c
+    AckCommand:
+      name: ack
+      title: ack
+      description: 'Klien -> server. Pengirim: semua. Tidak pernah mengubah data domain (REST satu-satunya jalur tulis).'
+      payload:
+        $ref: '#/components/schemas/AckData'
+      x-sender: semua
+      x-direction: c2s
+    AuthRefreshCommand:
+      name: auth.refresh
+      title: auth.refresh
+      description: 'Klien -> server. Pengirim: semua. Tidak pernah mengubah data domain (REST satu-satunya jalur tulis).'
+      payload:
+        $ref: '#/components/schemas/AuthRefreshData'
+      x-sender: semua
+      x-direction: c2s
+    AppStateCommand:
+      name: app.state
+      title: app.state
+      description: 'Klien -> server. Pengirim: semua. Tidak pernah mengubah data domain (REST satu-satunya jalur tulis).'
+      payload:
+        $ref: '#/components/schemas/AppStateChangedData'
+      x-sender: semua
+      x-direction: c2s
+    UnitLocationCommand:
+      name: unit.location
+      title: unit.location
+      description: 'Klien -> server. Pengirim: responder. Tidak pernah mengubah data domain (REST satu-satunya jalur tulis).'
+      payload:
+        $ref: '#/components/schemas/UnitLocationData'
+      x-sender: responder
+      x-direction: c2s
+  schemas:
+    Coordinates:
+      type: object
+      required:
+      - lat
+      - lng
+      properties:
+        lat:
+          type: number
+          format: double
+        lng:
+          type: number
+          format: double
+        accuracyM:
+          type: number
+    EventEnvelope:
+      type: object
+      required:
+      - eid
+      - id
+      - type
+      - v
+      - ts
+      - class
+      - ackRequired
+      - data
+      properties:
+        eid:
+          type: string
+          format: uuid
+          description: Id pengiriman logis (untuk dedup WS/FCM)
+        id:
+          type:
+          - string
+          - 'null'
+          description: Id incident_events (kursor sync); null untuk event sementara
+        type:
+          type: string
+          description: Nama event (juga nama event Socket.IO)
+        v:
+          type: integer
+          description: Versi skema payload
+        ts:
+          type: string
+          format: date-time
+        incidentId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        dispatchId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        resourceVersion:
+          type:
+          - integer
+          - 'null'
+        class:
+          type: string
+          enum:
+          - CRITICAL
+          - STANDARD
+          - INFO
+        ackRequired:
+          type: boolean
+        data:
+          type: object
+    ConnectionReadyData:
+      type: object
+      required:
+      - serverTime
+      - userId
+      - rooms
+      - minAppVersion
+      - resyncRecommended
+      properties:
+        serverTime:
+          type: string
+          format: date-time
+        userId:
+          type: string
+          format: uuid
+        rooms:
+          type: array
+          items:
+            type: string
+        minAppVersion:
+          type: string
+        resyncRecommended:
+          type: boolean
+          const: true
+    AuthExpiringData:
+      type: object
+      required:
+      - expiresInSeconds
+      properties:
+        expiresInSeconds:
+          type: integer
+    SessionRevokedData:
+      type: object
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          enum:
+          - LOGOUT
+          - ACCOUNT_DEACTIVATED
+          - REFRESH_REUSE
+          - ADMIN_REVOKED
+    SystemNoticeData:
+      type: object
+      required:
+      - level
+      - message
+      properties:
+        level:
+          type: string
+        message:
+          type: string
+    IncidentSummaryData:
+      type: object
+      description: IncidentSummary ringkas (mengikuti REST §4)
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        status:
+          type: string
+          enum:
+          - SUBMITTED
+          - VERIFIED
+          - IN_PROGRESS
+          - RESOLVED
+          - CLOSED
+          - INVALID
+          - DUPLICATE
+        type:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+        severity:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        district:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+        village:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+        location:
+          $ref: '#/components/schemas/Coordinates'
+        reportCount:
+          type: integer
+        version:
+          type: integer
+    IncidentCreatedData:
+      type: object
+      required:
+      - incident
+      properties:
+        incident:
+          $ref: '#/components/schemas/IncidentSummaryData'
+        suggestedIncidentId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        flags:
+          type: array
+          items:
+            type: string
+    IncidentReportAddedData:
+      type: object
+      required:
+      - reportId
+      - incident
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        incident:
+          $ref: '#/components/schemas/IncidentSummaryData'
+    IncidentUpdatedData:
+      type: object
+      required:
+      - changes
+      properties:
+        changes:
+          type: object
+    IncidentLocationUpdatedData:
+      type: object
+      required:
+      - location
+      properties:
+        location:
+          $ref: '#/components/schemas/Coordinates'
+        addressText:
+          type:
+          - string
+          - 'null'
+    IncidentStatusChangedData:
+      type: object
+      required:
+      - from
+      - to
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        incident:
+          $ref: '#/components/schemas/IncidentSummaryData'
+    IncidentLockedData:
+      type: object
+      required:
+      - lockedBy
+      properties:
+        lockedBy:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+        lockExpiresAt:
+          type: string
+          format: date-time
+    IncidentLockOverriddenData:
+      type: object
+      required:
+      - previousHolder
+      - newHolder
+      properties:
+        previousHolder:
+          type: object
+        newHolder:
+          type: object
+        reason:
+          type: string
+    IncidentMergedData:
+      type: object
+      required:
+      - sourceId
+      - targetId
+      properties:
+        sourceId:
+          type: string
+          format: uuid
+        targetId:
+          type: string
+          format: uuid
+    IncidentLeadChangedData:
+      type: object
+      required:
+      - leadOrganization
+      properties:
+        leadOrganization:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+    IncidentCasualtiesUpdatedData:
+      type: object
+      required:
+      - injured
+      - deceased
+      properties:
+        injured:
+          type: integer
+        deceased:
+          type: integer
+        critical:
+          type:
+          - integer
+          - 'null'
+        missing:
+          type:
+          - integer
+          - 'null'
+        reportedAt:
+          type: string
+          format: date-time
+    IncidentMilestoneRecordedData:
+      type: object
+      required:
+      - code
+      properties:
+        code:
+          type: string
+          enum:
+          - SCENE_RELEASED
+          - ROAD_REOPENED
+          - VICTIM_DECEASED_HANDLED
+          - EXTERNAL_UNIT_ARRIVED
+          - EXTERNAL_COORDINATION
+        note:
+          type:
+          - string
+          - 'null'
+        payload:
+          type:
+          - object
+          - 'null'
+        occurredAt:
+          type: string
+          format: date-time
+    IncidentNoteAddedData:
+      type: object
+      required:
+      - noteId
+      properties:
+        noteId:
+          type: string
+        visibility:
+          type: string
+          enum:
+          - INTERNAL
+          - LEAD
+          - UNITS
+    OfferIncidentData:
+      type: object
+      description: Incident pada OfferView — TANPA lokasi presisi/deskripsi (REST §4.1)
+      properties:
+        code:
+          type: string
+        type:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+        severity:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        district:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+        village:
+          type: object
+          properties:
+            code:
+              type: string
+            name:
+              type: string
+        distanceM:
+          type:
+          - integer
+          - 'null'
+    OfferViewData:
+      type: object
+      required:
+      - dispatchId
+      - incident
+      - type
+      - origin
+      - status
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        incident:
+          $ref: '#/components/schemas/OfferIncidentData'
+        type:
+          type: string
+          enum:
+          - RESPOND
+          - NOTIFY
+        origin:
+          type: string
+          enum:
+          - DISPATCHER
+          - SELF_INITIATED
+          - REQUESTED
+        status:
+          type: string
+          enum:
+          - OFFERED
+          - ACCEPTED
+          - EN_ROUTE
+          - ON_SCENE
+          - DONE
+          - REJECTED
+          - EXPIRED
+          - CANCELLED
+          - NOTIFIED
+          - READY
+          - FULL
+          - PATIENT_ARRIVED
+        offerExpiresAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        note:
+          type:
+          - string
+          - 'null'
+    DispatchOfferedData:
+      type: object
+      required:
+      - offer
+      - offerExpiresAt
+      properties:
+        offer:
+          $ref: '#/components/schemas/OfferViewData'
+        offerExpiresAt:
+          type: string
+          format: date-time
+    DispatchNotifiedData:
+      type: object
+      required:
+      - incidentType
+      properties:
+        incidentType:
+          type: string
+        casualties:
+          type: object
+        etaMinutes:
+          type:
+          - integer
+          - 'null'
+        sourceDispatchId:
+          type: string
+          format: uuid
+    DispatchSummaryData:
+      type: object
+      description: DispatchSummary ringkas (mengikuti REST §4)
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        incidentId:
+          type: string
+          format: uuid
+        organization:
+          type: object
+        unit:
+          type:
+          - object
+          - 'null'
+        type:
+          type: string
+          enum:
+          - RESPOND
+          - NOTIFY
+        status:
+          type: string
+    DispatchCreatedData:
+      type: object
+      required:
+      - dispatch
+      properties:
+        dispatch:
+          $ref: '#/components/schemas/DispatchSummaryData'
+    DispatchAcceptedData:
+      type: object
+      required:
+      - dispatchId
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        acceptedBy:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+        unit:
+          type:
+          - object
+          - 'null'
+        etaMinutes:
+          type:
+          - integer
+          - 'null'
+    DispatchRejectedData:
+      type: object
+      required:
+      - dispatchId
+      - reason
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        organization:
+          type: object
+        reason:
+          type: string
+    DispatchExpiredData:
+      type: object
+      required:
+      - dispatchId
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        organization:
+          type: object
+    DispatchCancelledData:
+      type: object
+      required:
+      - dispatchId
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        reason:
+          type:
+          - string
+          - 'null'
+    DispatchSelfInitiatedData:
+      type: object
+      required:
+      - dispatch
+      properties:
+        dispatch:
+          $ref: '#/components/schemas/DispatchSummaryData'
+        channel:
+          type: string
+    DispatchStatusChangedData:
+      type: object
+      required:
+      - dispatchId
+      - from
+      - to
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        from:
+          type: string
+        to:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        recordedBy:
+          type:
+          - object
+          - 'null'
+        channel:
+          type:
+          - string
+          - 'null'
+        organization:
+          type: object
+    DispatchOfferUnseenData:
+      type: object
+      required:
+      - dispatchId
+      - secondsSinceOffer
+      properties:
+        dispatchId:
+          type: string
+          format: uuid
+        organization:
+          type: object
+        secondsSinceOffer:
+          type: integer
+    ResourceRequestCreatedData:
+      type: object
+      required:
+      - requestId
+      - resourceType
+      - quantity
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        incident:
+          $ref: '#/components/schemas/IncidentSummaryData'
+        resourceType:
+          type: string
+        quantity:
+          type: integer
+        urgency:
+          type: string
+          enum:
+          - NORMAL
+          - URGENT
+        reason:
+          type: string
+    ResourceRequestDecidedData:
+      type: object
+      required:
+      - requestId
+      - status
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - APPROVED
+          - REJECTED
+        note:
+          type:
+          - string
+          - 'null'
+    ReportStatusChangedData:
+      type: object
+      required:
+      - reportId
+      - publicStatus
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        publicStatus:
+          type: string
+          enum:
+          - RECEIVED
+          - VERIFIED
+          - UNIT_DISPATCHED
+          - UNIT_EN_ROUTE
+          - UNIT_ON_SCENE
+          - RESOLVED
+          - NOT_VALID
+          - OUT_OF_AREA
+        message:
+          type: string
+    ReportTimelineUpdatedData:
+      type: object
+      required:
+      - reportId
+      - entry
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        entry:
+          type: object
+          properties:
+            ts:
+              type: string
+              format: date-time
+            text:
+              type: string
+    AlertData:
+      type: object
+      required:
+      - id
+      - title
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        level:
+          type: string
+          enum:
+          - INFO
+          - WARNING
+          - ALERT
+          - EMERGENCY
+        title:
+          type: string
+        body:
+          type: string
+        instruction:
+          type:
+          - string
+          - 'null'
+    AlertPublishedData:
+      type: object
+      required:
+      - alert
+      properties:
+        alert:
+          $ref: '#/components/schemas/AlertData'
+    AlertUpdatedData:
+      type: object
+      required:
+      - alertId
+      properties:
+        alertId:
+          type: string
+          format: uuid
+        changes:
+          type: object
+    AlertClosedData:
+      type: object
+      required:
+      - alertId
+      properties:
+        alertId:
+          type: string
+          format: uuid
+    NotificationCreatedData:
+      type: object
+      required:
+      - notificationId
+      - kind
+      - title
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        title:
+          type: string
+        unreadCount:
+          type: integer
+    UnitStatusChangedData:
+      type: object
+      required:
+      - unitId
+      - status
+      properties:
+        unitId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - AVAILABLE
+          - BUSY
+          - OFFLINE
+          - OUT_OF_SERVICE
+    UnitLocationUpdatedData:
+      type: object
+      required:
+      - unitId
+      - location
+      properties:
+        unitId:
+          type: string
+          format: uuid
+        location:
+          $ref: '#/components/schemas/Coordinates'
+        recordedAt:
+          type: string
+          format: date-time
+    AckData:
+      type: object
+      required:
+      - eid
+      - state
+      properties:
+        eid:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+          - DELIVERED
+          - SEEN
+        at:
+          type: string
+          format: date-time
+    AuthRefreshData:
+      type: object
+      required:
+      - accessToken
+      properties:
+        accessToken:
+          type: string
+    AppStateChangedData:
+      type: object
+      required:
+      - state
+      properties:
+        state:
+          type: string
+          enum:
+          - FOREGROUND
+          - BACKGROUND
+    UnitLocationData:
+      type: object
+      required:
+      - lat
+      - lng
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        accuracyM:
+          type: number
+        recordedAt:
+          type: string
+          format: date-time
+        heading:
+          type:
+          - number
+          - 'null'
+        speedMps:
+          type:
+          - number
+          - 'null'

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "VERSION_CONFLICT",
+    "message": "Data telah diubah pihak lain.",
+    "requestId": "a1b2c3",
+    "currentVersion": 5
+  }
+}

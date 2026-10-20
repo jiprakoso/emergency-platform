@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "OFFER_NO_LONGER_AVAILABLE",
+    "message": "Offer sudah tidak berlaku.",
+    "requestId": "a1b2c3"
+  }
+}

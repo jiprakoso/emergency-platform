@@ -1,0 +1,34 @@
+{
+  "data": [
+    {
+      "organization": {
+        "id": "55555555-5555-4555-8555-555555555506",
+        "name": "Layanan Ambulans Kota Contoh",
+        "type": "AMBULANCE"
+      },
+      "dispatchType": "RESPOND",
+      "required": true,
+      "alreadyDispatched": false
+    },
+    {
+      "organization": {
+        "id": "55555555-5555-4555-8555-555555555502",
+        "name": "Polres Kota Contoh",
+        "type": "POLICE"
+      },
+      "dispatchType": "RESPOND",
+      "required": true,
+      "alreadyDispatched": true
+    },
+    {
+      "organization": {
+        "id": "55555555-5555-4555-8555-555555555503",
+        "name": "Dinas Pemadam Kebakaran Kota Contoh",
+        "type": "FIRE"
+      },
+      "dispatchType": "RESPOND",
+      "required": false,
+      "alreadyDispatched": false
+    }
+  ]
+}

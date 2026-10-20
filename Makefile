@@ -33,10 +33,15 @@ lint:
 	@echo "lint selesai."
 
 contract:
-	@echo "==> spectral lint (openapi.yaml)"
-	npx --yes @stoplight/spectral-cli lint contracts/openapi.yaml --ruleset contracts/.spectral.yaml
-	@echo "==> cakupan endpoint (dokumen <-> kontrak)"
+	@echo "==> spectral lint (openapi.yaml + asyncapi.yaml)"
+	cd contracts/scripts && ./node_modules/.bin/spectral lint ../openapi.yaml -r ../.spectral.yaml --fail-severity warn
+	cd contracts/scripts && ./node_modules/.bin/spectral lint ../asyncapi.yaml -r .spectral-asyncapi.js --fail-severity warn
+	@echo "==> cakupan endpoint (dokumen <-> openapi)"
 	python3 contracts/scripts/check-coverage.py
+	@echo "==> cakupan event (dokumen <-> asyncapi)"
+	python3 contracts/scripts/check-asyncapi-coverage.py
+	@echo "==> validasi contoh JSON (contracts/examples)"
+	cd contracts/scripts && node check-examples.mjs
 	@echo "contract OK."
 
 demo-bots:

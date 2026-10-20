@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "Terjadi kesalahan pada server.",
+    "requestId": "a1b2c3"
+  }
+}

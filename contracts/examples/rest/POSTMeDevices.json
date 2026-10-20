@@ -1,0 +1,11 @@
+{
+  "data": {
+    "id": "77777777-7777-4777-8777-777777777799",
+    "platform": "ANDROID",
+    "appFlavor": "CITIZEN",
+    "appVersion": "1.0.0",
+    "fcmToken": "sampel-fcm-token-bukan-token-nyata",
+    "pushEnabled": true,
+    "createdAt": "2026-10-05T03:15:00Z"
+  }
+}

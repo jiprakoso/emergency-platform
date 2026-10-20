@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "code": "CITIZEN",
+      "name": "Warga"
+    },
+    {
+      "code": "RESPONDER",
+      "name": "Responder"
+    },
+    {
+      "code": "DISPATCHER",
+      "name": "Dispatcher"
+    },
+    {
+      "code": "SUPERVISOR",
+      "name": "Supervisor"
+    },
+    {
+      "code": "ORG_ADMIN",
+      "name": "Admin Organisasi"
+    },
+    {
+      "code": "ALERT_MANAGER",
+      "name": "Pengelola Alert"
+    },
+    {
+      "code": "SUPER_ADMIN",
+      "name": "Super Admin"
+    }
+  ]
+}

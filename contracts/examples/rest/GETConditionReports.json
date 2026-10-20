@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "reportId": "33333333-3333-4333-8333-333333333302",
+      "typeCode": "FLOOD",
+      "district": {
+        "code": "99.99.03.1001",
+        "name": "Kel. Pesisir"
+      },
+      "location": {
+        "lat": -7.33,
+        "lng": 112.7
+      },
+      "createdAt": "2026-10-05T03:20:00Z"
+    }
+  ]
+}

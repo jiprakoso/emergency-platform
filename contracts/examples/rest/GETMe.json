@@ -1,0 +1,18 @@
+{
+  "data": {
+    "id": "66666666-6666-4666-8666-666666666601",
+    "userType": "CITIZEN",
+    "fullName": "Budi",
+    "phone": "0812-0000-0001",
+    "homeRegion": {
+      "code": "99.99.01.1001",
+      "name": "Kel. Mawar"
+    },
+    "homePoint": {
+      "lat": -7.225,
+      "lng": 112.69
+    },
+    "reputation": 0,
+    "status": "ACTIVE"
+  }
+}

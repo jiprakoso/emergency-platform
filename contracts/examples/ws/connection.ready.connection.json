@@ -1,0 +1,22 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": null,
+  "type": "connection.ready",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "INFO",
+  "ackRequired": false,
+  "data": {
+    "serverTime": "2026-10-05T03:15:00Z",
+    "userId": "66666666-6666-4666-8666-666666666602",
+    "rooms": [
+      "role:dispatcher",
+      "org:55555555-5555-4555-8555-555555555501"
+    ],
+    "minAppVersion": "1.0.0",
+    "resyncRecommended": true
+  }
+}

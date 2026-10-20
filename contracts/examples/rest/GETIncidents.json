@@ -1,0 +1,299 @@
+{
+  "data": [
+    {
+      "id": "11111111-1111-4111-8111-111111111101",
+      "code": "INC-20261005-000123",
+      "type": {
+        "code": "TRAFFIC_ACCIDENT",
+        "name": "Kecelakaan Lalu Lintas"
+      },
+      "status": "IN_PROGRESS",
+      "severity": "HIGH",
+      "district": {
+        "code": "99.99.02",
+        "name": "Kec. Bukit"
+      },
+      "village": {
+        "code": "99.99.02.1001",
+        "name": "Kel. Anggrek"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555502",
+        "name": "Polres Kota Contoh",
+        "type": "POLICE"
+      },
+      "createdAt": "2026-10-05T03:15:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": []
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "INC-20261005-000124",
+      "type": {
+        "code": "MEDICAL",
+        "name": "Darurat Medis"
+      },
+      "status": "SUBMITTED",
+      "severity": "MEDIUM",
+      "district": {
+        "code": "99.99.01",
+        "name": "Kec. Sinar"
+      },
+      "village": {
+        "code": "99.99.01.1001",
+        "name": "Kel. Mawar"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555502",
+        "name": "Polres Kota Contoh",
+        "type": "POLICE"
+      },
+      "createdAt": "2026-10-05T03:15:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": []
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "INC-20261005-000125",
+      "type": {
+        "code": "FLOOD",
+        "name": "Banjir"
+      },
+      "status": "VERIFIED",
+      "severity": "CRITICAL",
+      "district": {
+        "code": "99.99.03",
+        "name": "Kec. Muara"
+      },
+      "village": {
+        "code": "99.99.03.1001",
+        "name": "Kel. Pesisir"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555507",
+        "name": "BPBD Kota Contoh",
+        "type": "BPBD"
+      },
+      "createdAt": "2026-10-05T03:15:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": [
+        "SUGGESTED_DUPLICATE"
+      ]
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "INC-20261005-000126",
+      "type": {
+        "code": "FIRE",
+        "name": "Kebakaran"
+      },
+      "status": "RESOLVED",
+      "severity": "LOW",
+      "district": {
+        "code": "99.99.01",
+        "name": "Kec. Sinar"
+      },
+      "village": {
+        "code": "99.99.01.1001",
+        "name": "Kel. Mawar"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555503",
+        "name": "Dinas Pemadam Kebakaran Kota Contoh",
+        "type": "FIRE"
+      },
+      "createdAt": "2026-10-05T03:15:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": []
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "INC-20261005-000127",
+      "type": {
+        "code": "TRAFFIC_ACCIDENT",
+        "name": "Kecelakaan Lalu Lintas"
+      },
+      "status": "CLOSED",
+      "severity": "MEDIUM",
+      "district": {
+        "code": "99.99.02",
+        "name": "Kec. Bukit"
+      },
+      "village": {
+        "code": "99.99.02.1001",
+        "name": "Kel. Anggrek"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555502",
+        "name": "Polres Kota Contoh",
+        "type": "POLICE"
+      },
+      "createdAt": "2026-10-04T01:00:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": []
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "INC-20261005-000128",
+      "type": {
+        "code": "OTHER",
+        "name": "Lainnya"
+      },
+      "status": "INVALID",
+      "severity": "LOW",
+      "district": {
+        "code": "99.99.03",
+        "name": "Kec. Muara"
+      },
+      "village": {
+        "code": "99.99.03.1001",
+        "name": "Kel. Pesisir"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555502",
+        "name": "Polres Kota Contoh",
+        "type": "POLICE"
+      },
+      "createdAt": "2026-10-05T03:15:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": []
+    },
+    {
+      "id": "11111111-1111-4111-8111-111111111102",
+      "code": "INC-20261005-000129",
+      "type": {
+        "code": "TRAFFIC_ACCIDENT",
+        "name": "Kecelakaan Lalu Lintas"
+      },
+      "status": "DUPLICATE",
+      "severity": "MEDIUM",
+      "district": {
+        "code": "99.99.02",
+        "name": "Kec. Bukit"
+      },
+      "village": {
+        "code": "99.99.02.1001",
+        "name": "Kel. Anggrek"
+      },
+      "leadOrganization": {
+        "id": "55555555-5555-4555-8555-555555555502",
+        "name": "Polres Kota Contoh",
+        "type": "POLICE"
+      },
+      "createdAt": "2026-10-05T03:15:00Z",
+      "dispatchSummary": {
+        "active": 1,
+        "offered": 0,
+        "rejected": 0,
+        "expired": 0,
+        "byOrganization": [
+          {
+            "organization": {
+              "id": "55555555-5555-4555-8555-555555555506",
+              "name": "Layanan Ambulans Kota Contoh",
+              "type": "AMBULANCE"
+            },
+            "active": 1
+          }
+        ]
+      },
+      "attentionReasons": [
+        "SUGGESTED_DUPLICATE"
+      ]
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

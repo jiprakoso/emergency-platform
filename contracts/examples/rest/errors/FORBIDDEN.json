@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Anda tidak memiliki izin untuk aksi ini.",
+    "requestId": "a1b2c3"
+  }
+}

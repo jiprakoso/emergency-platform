@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "RESOURCE_REQUEST_ALREADY_DECIDED",
+    "message": "Permintaan bantuan sudah diputuskan.",
+    "requestId": "a1b2c3"
+  }
+}

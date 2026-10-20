@@ -1,0 +1,13 @@
+{
+  "data": {
+    "inServiceArea": true,
+    "district": {
+      "code": "99.99.01",
+      "name": "Kec. Sinar"
+    },
+    "village": {
+      "code": "99.99.01.1001",
+      "name": "Kel. Mawar"
+    }
+  }
+}

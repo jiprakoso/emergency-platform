@@ -1,0 +1,19 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "incident.locked",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": "11111111-1111-4111-8111-111111111101",
+  "dispatchId": null,
+  "resourceVersion": 4,
+  "class": "STANDARD",
+  "ackRequired": false,
+  "data": {
+    "lockedBy": {
+      "id": "66666666-6666-4666-8666-666666666602",
+      "name": "Dispatcher Rina"
+    },
+    "lockExpiresAt": "2026-10-05T03:20:00Z"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "TWO_FACTOR_REQUIRED",
+    "message": "Login memerlukan kode 2FA.",
+    "requestId": "a1b2c3"
+  }
+}

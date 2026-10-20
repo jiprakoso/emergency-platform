@@ -1,0 +1,38 @@
+{
+  "data": [
+    {
+      "id": "55555555-5555-4555-8555-555555555502",
+      "name": "Polres Kota Contoh",
+      "type": "POLICE"
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555503",
+      "name": "Dinas Pemadam Kebakaran Kota Contoh",
+      "type": "FIRE"
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555504",
+      "name": "RSUD Kota Contoh",
+      "type": "HOSPITAL"
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555505",
+      "name": "RS Pratama Muara",
+      "type": "HOSPITAL"
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555506",
+      "name": "Layanan Ambulans Kota Contoh",
+      "type": "AMBULANCE"
+    },
+    {
+      "id": "55555555-5555-4555-8555-555555555507",
+      "name": "BPBD Kota Contoh",
+      "type": "BPBD"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+      "kind": "DISPATCH_OFFER",
+      "title": "Penugasan baru: Kecelakaan Lalu Lintas",
+      "body": "Kec. Bukit, ±1,1 km.",
+      "readAt": null,
+      "createdAt": "2026-10-05T03:20:00Z"
+    },
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02",
+      "kind": "REPORT_UPDATE",
+      "title": "Laporan Anda diperbarui",
+      "body": "Unit menuju lokasi.",
+      "readAt": "2026-10-05T03:35:00Z",
+      "createdAt": "2026-10-05T03:35:00Z"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

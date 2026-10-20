@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "OTP_INVALID",
+    "message": "Kode OTP salah.",
+    "requestId": "a1b2c3"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "data": {
+    "twoFactorRequired": true,
+    "challengeToken": "sampel-challenge-token-2fa"
+  }
+}

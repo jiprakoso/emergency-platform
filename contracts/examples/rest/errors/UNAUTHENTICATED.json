@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "UNAUTHENTICATED",
+    "message": "Sesi tidak valid atau sudah kedaluwarsa.",
+    "requestId": "a1b2c3"
+  }
+}

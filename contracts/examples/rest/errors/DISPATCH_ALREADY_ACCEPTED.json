@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "DISPATCH_ALREADY_ACCEPTED",
+    "message": "Dispatch sudah diterima responder lain.",
+    "requestId": "a1b2c3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "resource_request.decided",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "STANDARD",
+  "ackRequired": false,
+  "data": {
+    "requestId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb01",
+    "status": "APPROVED",
+    "note": "Unit cadangan dikirim."
+  }
+}

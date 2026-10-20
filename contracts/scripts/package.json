@@ -1,0 +1,21 @@
+{
+  "name": "@emergency-platform/contracts-scripts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Alat bantu kontrak: lint (Spectral), validasi contoh JSON (ajv), mock server (Prism).",
+  "packageManager": "pnpm@8.15.6",
+  "scripts": {
+    "lint:openapi": "spectral lint ../openapi.yaml -r ../.spectral.yaml --fail-severity warn",
+    "lint:asyncapi": "spectral lint ../asyncapi.yaml -r .spectral-asyncapi.js --fail-severity warn",
+    "check:examples": "node check-examples.mjs",
+    "mock": "prism mock ../../contracts/openapi.yaml --port 4010"
+  },
+  "devDependencies": {
+    "@stoplight/prism-cli": "^5.9.2",
+    "@stoplight/spectral-cli": "^6.17.0",
+    "@stoplight/spectral-rulesets": "^1.23.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.6.1"
+  }
+}

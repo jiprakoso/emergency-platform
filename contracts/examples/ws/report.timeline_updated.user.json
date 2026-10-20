@@ -1,0 +1,19 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "report.timeline_updated",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": null,
+  "dispatchId": null,
+  "resourceVersion": null,
+  "class": "INFO",
+  "ackRequired": false,
+  "data": {
+    "reportId": "33333333-3333-4333-8333-333333333301",
+    "entry": {
+      "ts": "2026-10-05T03:20:00Z",
+      "text": "Unit menuju lokasi."
+    }
+  }
+}

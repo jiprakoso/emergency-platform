@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "NOT_LEAD_ORGANIZATION",
+    "message": "Hanya lead organisation yang boleh melakukan aksi ini.",
+    "requestId": "a1b2c3"
+  }
+}

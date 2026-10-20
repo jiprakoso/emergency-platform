@@ -1,0 +1,14 @@
+{
+  "data": [
+    "report.create",
+    "report.read_own",
+    "incident.read_all",
+    "incident.verify",
+    "dispatch.create",
+    "dispatch.respond",
+    "unit.update_own",
+    "alert.create",
+    "settings.manage",
+    "audit.read_all"
+  ]
+}

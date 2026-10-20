@@ -1,0 +1,13 @@
+{
+  "error": {
+    "code": "INVALID_STATUS_TRANSITION",
+    "message": "Dispatch tidak dapat berpindah dari DONE ke EN_ROUTE.",
+    "requestId": "a1b2c3",
+    "details": [
+      {
+        "field": "toStatus",
+        "issue": "not_allowed_from_current"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "Data tidak valid.",
+    "requestId": "a1b2c3",
+    "details": [
+      {
+        "field": "typeCode",
+        "issue": "required"
+      }
+    ]
+  }
+}

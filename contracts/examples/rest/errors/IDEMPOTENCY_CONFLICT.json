@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "IDEMPOTENCY_CONFLICT",
+    "message": "Permintaan duplikat dengan isi berbeda.",
+    "requestId": "a1b2c3"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "data": {
+    "serverTime": "2026-10-05T03:15:00Z",
+    "minAppVersion": "1.0.0",
+    "operatingHours": {
+      "timezone": "Asia/Jakarta",
+      "mode": "24x7"
+    },
+    "operatingNow": true,
+    "emergencyContacts": [
+      {
+        "name": "Darurat Terpadu (contoh)",
+        "phone": "000-112"
+      },
+      {
+        "name": "Polisi (contoh)",
+        "phone": "000-110"
+      }
+    ],
+    "limits": {
+      "photo_max_mb": 10,
+      "video_max_mb": 50,
+      "max_attachments": 5
+    },
+    "disclaimer": "Aplikasi ini bukan pengganti nomor darurat resmi. Untuk kondisi mengancam nyawa, hubungi nomor darurat langsung."
+  }
+}

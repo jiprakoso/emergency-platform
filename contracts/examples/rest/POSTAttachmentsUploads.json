@@ -1,0 +1,7 @@
+{
+  "data": {
+    "attachmentId": "88888888-8888-4888-8888-888888888801",
+    "uploadUrl": "https://minio.contoh.test/uploads/sampel?X-Amz-Expires=900",
+    "expiresAt": "2026-10-05T03:30:00Z"
+  }
+}

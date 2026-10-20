@@ -1,0 +1,6 @@
+{
+  "data": {
+    "url": "https://minio.contoh.test/attachments/sampel?X-Amz-Expires=900",
+    "expiresAt": "2026-10-05T03:30:00Z"
+  }
+}

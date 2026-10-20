@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "REPORT_KIND_NOT_ALLOWED",
+    "message": "Jenis laporan tidak diizinkan untuk insiden ini.",
+    "requestId": "a1b2c3"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "eid": "cccccccc-cccc-4ccc-8ccc-cccccccccc01",
+  "id": "1008",
+  "type": "incident.casualties_updated",
+  "v": 1,
+  "ts": "2026-10-05T03:20:00Z",
+  "incidentId": "11111111-1111-4111-8111-111111111101",
+  "dispatchId": null,
+  "resourceVersion": 4,
+  "class": "STANDARD",
+  "ackRequired": false,
+  "data": {
+    "injured": 2,
+    "deceased": 0,
+    "critical": 1,
+    "missing": null,
+    "reportedAt": "2026-10-05T03:20:00Z"
+  }
+}

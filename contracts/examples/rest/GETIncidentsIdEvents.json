@@ -1,0 +1,59 @@
+{
+  "data": [
+    {
+      "id": "1001",
+      "type": "incident.verified",
+      "occurredAt": "2026-10-05T03:15:00Z",
+      "actorName": "Dispatcher Rina"
+    },
+    {
+      "id": "1002",
+      "type": "dispatch.created",
+      "occurredAt": "2026-10-05T03:20:00Z",
+      "channel": "PHONE",
+      "actorName": "Dispatcher Rina"
+    },
+    {
+      "id": "1003",
+      "type": "incident.milestone_recorded",
+      "occurredAt": "2026-10-05T03:35:00Z",
+      "code": "SCENE_RELEASED",
+      "note": "Berbaikan"
+    },
+    {
+      "id": "1004",
+      "type": "incident.milestone_recorded",
+      "occurredAt": "2026-10-05T03:35:00Z",
+      "code": "ROAD_REOPENED"
+    },
+    {
+      "id": "1005",
+      "type": "incident.milestone_recorded",
+      "occurredAt": "2026-10-05T03:35:00Z",
+      "code": "VICTIM_DECEASED_HANDLED"
+    },
+    {
+      "id": "1006",
+      "type": "incident.milestone_recorded",
+      "occurredAt": "2026-10-05T03:35:00Z",
+      "code": "EXTERNAL_UNIT_ARRIVED"
+    },
+    {
+      "id": "1007",
+      "type": "incident.milestone_recorded",
+      "occurredAt": "2026-10-05T03:35:00Z",
+      "code": "EXTERNAL_COORDINATION"
+    },
+    {
+      "id": "1008",
+      "type": "incident.note_added",
+      "occurredAt": "2026-10-05T03:35:00Z",
+      "noteId": "note-1",
+      "visibility": "LEAD"
+    }
+  ],
+  "page": {
+    "nextCursor": null,
+    "hasMore": false
+  }
+}

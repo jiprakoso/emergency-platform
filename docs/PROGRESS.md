@@ -32,4 +32,17 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - Catatan: contoh JSON (`contracts/examples/`) dan mock server dikerjakan di 0c; `asyncapi.yaml` di 0c.
 
 ### 0c - AsyncAPI, contoh JSON, mock server
-- Status: menunggu 0b disetujui (C0)
+- [x] `contracts/asyncapi.yaml` AsyncAPI 3.1.0: 42 pesan (38 event s2c + 4 perintah c2s)
+- [x] Ekstensi x-rooms, x-class (+DYNAMIC), x-ack-required, x-direction, x-fcm; envelope EventEnvelope
+- [x] `contracts/scripts/gen-asyncapi.py`: generator dari katalog dokumen WS §5-§6
+- [x] `contracts/scripts/check-asyncapi-coverage.py`: cakupan 38 s2c + 4 c2s OK
+- [x] Lint AsyncAPI (Spectral, ruleset asyncapi bawaan) 0 error/warning
+- [x] `contracts/examples/`: 63 respons REST (+ varian), 29 contoh galat, 64 contoh WS (amplop s2c, data c2s)
+- [x] `contracts/scripts/gen-examples.py` + `check-examples.mjs` (ajv 2020-12, validasi + cakupan)
+- [x] Mock server Prism (target `make` di `contracts/scripts/package.json`: `mock`, port 4010) — terverifikasi
+- [x] `make contract` diperluas: lint OpenAPI + AsyncAPI + cakupan REST + cakupan AsyncAPI + validasi contoh
+- Status: SELESAI (0c) - berhenti di sini (titik tinjau C0: OpenAPI + AsyncAPI + contoh menunggu persetujuan manusia)
+- Penyimpangan: memperbaiki 2 cacat OpenAPI yang membuat respons mustahil/taksa-eksklusif (lihat CC-001, CC-002)
+- Asumsi: A-004..A-008
+- Pertanyaan terbuka: -
+- Catatan: mock Prism belum dijadikan target Makefile tersendiri (dijalankan via `pnpm --dir contracts/scripts mock`); pertimbangkan menambah target `mock` bila diinginkan.
