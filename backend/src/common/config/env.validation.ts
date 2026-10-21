@@ -66,6 +66,30 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   OTP_PROVIDER?: string = 'mock';
+
+  @IsNumber()
+  @IsOptional()
+  OTP_TTL_SECONDS: number = 300;
+
+  @IsNumber()
+  @IsOptional()
+  OTP_RESEND_AFTER_SECONDS: number = 60;
+
+  @IsNumber()
+  @IsOptional()
+  ACCESS_TOKEN_TTL_SECONDS: number = 900;
+
+  @IsNumber()
+  @IsOptional()
+  CITIZEN_REFRESH_TTL_SECONDS: number = 30 * 24 * 60 * 60;
+
+  @IsNumber()
+  @IsOptional()
+  STAFF_REFRESH_TTL_SECONDS: number = 12 * 60 * 60;
+
+  @IsNumber()
+  @IsOptional()
+  TWO_FACTOR_CHALLENGE_TTL_SECONDS: number = 300;
 }
 
 export function validate(config: Record<string, unknown>) {

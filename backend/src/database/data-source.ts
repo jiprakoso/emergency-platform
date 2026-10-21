@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { entities } from './entities';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -7,7 +9,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'emergency_platform',
-  entities: ['src/**/*.entity.ts'],
+  entities,
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,
 });

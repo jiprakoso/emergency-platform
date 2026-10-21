@@ -1,4 +1,4 @@
-.PHONY: up down migrate seed reset-live verify test lint contract demo-bots
+.PHONY: up down migrate migrate-revert seed reset-live verify test lint contract demo-bots
 
 up:
 	@echo "Starting dev services..."
@@ -11,7 +11,12 @@ down:
 	@echo "Services stopped."
 
 migrate:
-	@echo "migrate: belum diimplementasikan (Fase 1)."
+	@echo "==> menjalankan migrasi"
+	cd backend && corepack pnpm migration:run
+
+migrate-revert:
+	@echo "==> membatalkan migrasi terakhir"
+	cd backend && corepack pnpm migration:revert
 
 seed:
 	@echo "seed: belum diimplementasikan (Fase 1)."

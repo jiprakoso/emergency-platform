@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisModule as IoRedisModule } from '@nestjs-modules/ioredis';
 
+@Global()
 @Module({
   imports: [
     IoRedisModule.forRootAsync({
@@ -12,5 +13,6 @@ import { RedisModule as IoRedisModule } from '@nestjs-modules/ioredis';
       }),
     }),
   ],
+  exports: [IoRedisModule],
 })
 export class RedisModule {}
