@@ -46,3 +46,26 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - Asumsi: A-004..A-008
 - Pertanyaan terbuka: -
 - Catatan: mock Prism belum dijadikan target Makefile tersendiri (dijalankan via `pnpm --dir contracts/scripts mock`); pertimbangkan menambah target `mock` bila diinginkan.
+
+## Fase 1 - Inti backend, identitas, data dasar
+### 1a - Skema, entitas, lapisan umum
+- [x] Migrasi `1700000001000-core-schema.ts`: 32 tabel ERD + indeks GiST + partial index + `CHECK` (status/tipe `varchar`, bukan enum PG); naik→turun→naik bersih di PostGIS 15-3.3
+- [x] Runner migrasi sendiri `src/database/migrate.ts` (run/revert/show) + `tsconfig.migrations.json` + DataSource barrel (`synchronize:false`)
+- [x] 32 entitas TypeORM di `src/database/entities/` + barrel; `typecheck` hijau
+- [x] Lapisan umum: katalog galat REST §7 + `AppError` + filter amplop galat (`Retry-After`), amplop sukses, `X-Request-Id` middleware, paginasi kursor, kripto (`sha256Hex`/`hashPayload`/`stableStringify`), idempotensi Redis (TTL 24 jam, konflik 422), rate limit (seluruh batas REST §8), occurred-at, `main.ts` (helmet, body 1 MB, prefix `api/v1`), `ClockModule` `@Global`
+- Status: SELESAI (1a)
+
+### 1b - Permission dan autentikasi
+- [x] Modul permission: katalog 38 kode + matriks `ROLE_PERMISSIONS`, `PermissionService` (cache Redis 60s), `@RequirePermission`, `PermissionGuard`
+- [x] Modul auth: OTP mock (`123456`), registrasi/login warga, login staf (kata sandi + 2FA TOTP opsional), refresh opaque berotasi + deteksi pemakaian ulang (cabut sesi + `REFRESH_TOKEN_REUSED`), logout, daftar/cabut sesi, ganti kata sandi, setup/enable 2FA
+- [x] `JwtAuthGuard` global (verifikasi access token, `@Public()`, cek Redis `session:revoked:<sid>`) + `PermissionGuard` global
+- [x] Modul me: `GET/PATCH /me` (profil + roles + org/unit + homeRegion + `permissions[]`), `POST/DELETE /me/devices`, `GET /me/alert-topics`; resolusi wilayah PostGIS (`ST_Contains`) + sinkronisasi topik FCM (`{env}_city`, `{env}_kec_{kode}`, `{env}_staff_alerts`)
+- [x] `/health` publik (dikecualikan dari guard)
+- Status: SELESAI (1b) - smoke test end-to-end hijau (OTP/register/login warga, login staf tanpa & dengan 2FA, setup/enable 2FA, ganti sandi, refresh rotasi + reuse, logout + penolakan token pasca-logout, `/me` warga & staf, `homeRegion` + topik distrik, `/me/devices`, `/me/alert-topics`)
+- Asumsi: A-010..A-013
+- Catatan: `GET /health/ready` masih stub (`pending`) - menunggu probe DB/Redis/storage. CRUD referensi (regions/organizations/units/incident-types/settings + `/config/public`) dan `seed:base`/`seed:verify` BELUM dikerjakan (lanjutan 1c). Belum ada framework tes otomatis (`backend` `test` masih placeholder).
+
+### 1c - BELUM DIKERJAKAN
+- [ ] CRUD referensi: regions, organizations, units, incident-types, settings, `GET /config/public`
+- [ ] Devices per REST §5.2 (bila ada endpoint berbeda dari `/me/devices`)
+- [ ] `seed:base` + `seed:verify` (V1-V11)

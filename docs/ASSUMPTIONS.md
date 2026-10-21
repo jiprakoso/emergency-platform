@@ -46,3 +46,26 @@ Untuk endpoint yang di kontrak bertipe `object` longgar (alerts, notifications,
 events, incident-types, roles, settings, shifts, condition-reports, auth sessions),
 contoh memakai field minimal yang disebut dokumen REST. Usulan pengetatan dicatat
 di `CONTRACT_CHANGES.md` (CC-006).
+
+## A-010: Format refresh token & TTL
+Refresh token sampel berbentuk opak `r1.<base64url(32 byte acak)>` (bukan JWT),
+disimpan sebagai hash; rotasi setiap `POST /auth/refresh`. TTL: warga 30 hari
+(2592000 s), staf 12 jam (43200 s) — mengikuti REST §11 (nilai 🔶) selama belum
+dikonfirmasi. Access token JWT 15 menit. Cookie HttpOnly ditunda ke Fase 7
+(deployment); sampel mengembalikan token di body.
+
+## A-011: 2FA opsional & kode OTP mock
+`twoFactorEnabled` default `false` untuk staf; login mengembalikan challenge bila
+aktif. Provider OTP sampel `mock` memakai kode tetap `123456` (nomor darurat sampel
+bukan nomor asli). Perubahan ke penyedia SMS nyata di Fase 7.
+
+## A-012: DeviceInfo tanpa `fcmToken`
+`device.fcmToken` opsional pada login/register (dashboard web tidak punya token FCM).
+Bila kosong, sesi tetap dibuat tanpa baris `device_tokens`. `POST /me/devices`
+(registrasi token) tetap mewajibkan `fcmToken`.
+
+## A-013: Pencabutan sesi & access token
+`POST /auth/logout` dan `DELETE /auth/sessions/{id}` mencabut sesi dan menandai Redis
+`session:revoked:<sid>` (TTL 24 jam); `JwtAuthGuard` menolak access token yang sesinya
+sudah dicabut (bukan hanya menunggu kedaluwarsa). Event WS `session.revoked` menyusul
+di Fase 4.
