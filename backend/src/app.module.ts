@@ -13,6 +13,7 @@ import { PermissionGuard } from './modules/permissions/permission.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { MeModule } from './modules/me/me.module';
+import { ReferenceModule } from './modules/reference/reference.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { MeModule } from './modules/me/me.module';
     PermissionsModule,
     AuthModule,
     MeModule,
+    ReferenceModule,
     HealthModule,
   ],
   providers: [
