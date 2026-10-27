@@ -10,11 +10,13 @@ import {
 import { ReferenceService } from './reference.service';
 import { ReferenceController } from './reference.controller';
 import { ClockModule } from '../../common/clock/clock.module';
+import { MeModule } from '../me/me.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([IncidentType, Region, Organization, Unit, SystemSetting]),
     ClockModule,
+    MeModule,
   ],
   providers: [ReferenceService],
   controllers: [ReferenceController],

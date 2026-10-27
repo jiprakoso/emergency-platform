@@ -53,6 +53,7 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - [x] Runner migrasi sendiri `src/database/migrate.ts` (run/revert/show) + `tsconfig.migrations.json` + DataSource barrel (`synchronize:false`)
 - [x] 32 entitas TypeORM di `src/database/entities/` + barrel; `typecheck` hijau
 - [x] Lapisan umum: katalog galat REST §7 + `AppError` + filter amplop galat (`Retry-After`), amplop sukses, `X-Request-Id` middleware, paginasi kursor, kripto (`sha256Hex`/`hashPayload`/`stableStringify`), idempotensi Redis (TTL 24 jam, konflik 422), rate limit (seluruh batas REST §8), occurred-at, `main.ts` (helmet, body 1 MB, prefix `api/v1`), `ClockModule` `@Global`
+- [x] `GET /health/ready` probe nyata: DB (`SELECT 1`), Redis (`PING`), object storage (`/minio/health/live`) → 200 bila siap, 503 bila ada dependensi bermasalah (kontrak `GETHealthReady`)
 - Status: SELESAI (1a)
 
 ### 1b - Permission dan autentikasi
@@ -61,11 +62,33 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - [x] `JwtAuthGuard` global (verifikasi access token, `@Public()`, cek Redis `session:revoked:<sid>`) + `PermissionGuard` global
 - [x] Modul me: `GET/PATCH /me` (profil + roles + org/unit + homeRegion + `permissions[]`), `POST/DELETE /me/devices`, `GET /me/alert-topics`; resolusi wilayah PostGIS (`ST_Contains`) + sinkronisasi topik FCM (`{env}_city`, `{env}_kec_{kode}`, `{env}_staff_alerts`)
 - [x] `/health` publik (dikecualikan dari guard)
+- [x] Boot diperbaiki: `express` menjadi dependensi langsung (layout pnpm ketat) — `node dist/main.js` berjalan tanpa jalan pintas
+- [x] Kata sandi memakai **Argon2id** (handoff §9.5, A-014); hash bcrypt lama tetap diverifikasi dan ditingkatkan saat `seed:base`
+- [x] Rahasia TOTP **terenkripsi AES-256-GCM** dengan `TOTP_ENCRYPTION_KEY` (handoff §9.5, A-015)
 - Status: SELESAI (1b) - smoke test end-to-end hijau (OTP/register/login warga, login staf tanpa & dengan 2FA, setup/enable 2FA, ganti sandi, refresh rotasi + reuse, logout + penolakan token pasca-logout, `/me` warga & staf, `homeRegion` + topik distrik, `/me/devices`, `/me/alert-topics`)
 - Asumsi: A-010..A-013
-- Catatan: `GET /health/ready` masih stub (`pending`) - menunggu probe DB/Redis/storage. CRUD referensi (regions/organizations/units/incident-types/settings + `/config/public`) dan `seed:base`/`seed:verify` BELUM dikerjakan (lanjutan 1c). Belum ada framework tes otomatis (`backend` `test` masih placeholder).
+- Catatan: CRUD administrasi (organizations/units/settings/staff/roles + `/config/public` tulis) masih lanjutan 1c. Belum ada framework tes otomatis (`backend` `test` masih placeholder) — lihat "Sisa gerbang Fase 1".
 
-### 1c - BELUM DIKERJAKAN
-- [ ] CRUD referensi: regions, organizations, units, incident-types, settings, `GET /config/public`
-- [ ] Devices per REST §5.2 (bila ada endpoint berbeda dari `/me/devices`)
-- [ ] `seed:base` + `seed:verify` (V1-V11)
+### 1c - Data referensi, config publik, seed (sebagian selesai)
+- [x] `GET /config/public`: kunci `system_settings` diselaraskan dengan seed §8 (`min_app_version`, `operating_hours`, `emergency_contacts`, `limits`, `disclaimer`, `sample_mode`) — sebelumnya semua pengaturan seed terlewat dan fallback memakai **nomor darurat asli**
+- [x] Nomor darurat di respons = nomor contoh (`000-112`, dst.); `sampleMode` ditambahkan (CC-007, diputuskan pemilik 2026-10-26)
+- [x] `operatingNow` memakai `ClockService` dan mendukung `mode: "24x7"`
+- [x] `GET /regions` tanpa `boundary`/`centroid`, `page` `{nextCursor, hasMore, limit}` dengan kursor opaque
+- [x] `GET /regions/resolve?lat=&lng=` (PostGIS `ST_Contains`) → `{inServiceArea, district, village}` (A-016)
+- [x] `GET /regions/{id}` (tidak ada di kontrak/dokumen) **dihapus**
+- [x] `seed:base` sesuai seed §3-§8: 10 wilayah + geometri (bbox/centroid), 7 organisasi + lokasi + wilayah layanan + `service_polygon`, 12 unit berposisi, 5 jenis kejadian + `suggested_resources`, 7 role + 38 permission dari katalog `ROLE_PERMISSIONS`, 21 staf + 4 warga (Argon2, OTP mock), 19 pengaturan; idempoten; normalisasi data luar-daftar (A-017)
+- [x] `seed:verify` V1-V11 **nyata tanpa hardcode**: hitungan persis, geometri (`ST_IsValid`/`ST_Covers`/`ST_Overlaps`), lokasi di dalam kota, relasi (service area, profil staf, CC), matriks permission == katalog, login 21 staf, `/config/public` (sampleMode + tanpa nomor asli), topic FCM, rekomendasi `AMB-02`, idempotensi (base() dijalankan lagi), penjaga `ENV=prod`
+- [x] `Makefile`: `make seed`, `make verify`, `make reset-live` terhubung ke skrip; `make up` kini menunggu postgres lalu menjalankan migrasi + `seed:base` (MinIO tetap best-effort — keterbatasan registry)
+- Sisa 1c: CRUD administrasi `organizations`/`units`/`settings`/`staff`/`roles` (REST §5.12) — milik jalur dashboard/administrasi (Dx6)
+- Status: SELESAI (1c sebagian) — gerbang Fase 1 **belum** ditutup (lihat "Sisa gerbang Fase 1")
+- Asumsi: A-014, A-015, A-016, A-017, A-018
+- Catatan: `seed:verify` lulus V1-V11 di DB dev (2026-10-26 dan 2026-10-27); seluruh pemeriksaan memakai query/layanan nyata, bukan nilai dipatok.
+- Verifikasi akhir 2026-10-27: `typecheck`/`build`/`make lint` (0 warning, 0 error)/`make contract` (114 endpoint, 63 contoh REST) hijau; `make up` → `make verify` → `make reset-live` → `make verify` sukses; smoke test HTTP hijau: `/api/v1/health` 200, `/api/v1/health/ready` 200 (`db/redis/storage: ok`), `/config/public` (sampleMode=true, nomor contoh), `/regions/resolve` dalam/kota luar kota + 401 tanpa token, alur 2FA staf penuh (setup → rahasia `enc:v1` di DB → enable kode salah 401 / benar 204 → login challenge → `login/2fa` salah 401 / benar 200).
+- Perbaikan pada verifikasi: `/health` & `/health/ready` kini ikut prefix `api/v1` sesuai kontrak (sebelumnya dikecualikan → 404 pada URL kontrak); `MINIO_USE_SSL` diparse eksplisit (`enableImplicitConversion` mengubah `'false'` menjadi `true` sehingga probe memakai HTTPS dan selalu gagal).
+
+## Sisa gerbang Fase 1 (BELUM)
+- [ ] **Tes otomatis belum ada**: `pnpm test` masih placeholder, 0 berkas `*.spec.ts`, tidak ada Jest/Vitest → gerbang "tes autentikasi (OTP, rotasi refresh, deteksi pemakaian ulang, 2FA)" dan "tes permission (matriks)" belum terpenuhi; `make test` tidak menjalankan apa pun
+- [ ] Titik tinjau **C0** belum tercatat disetujui di `DECISIONS.md`; `CC-003`..`CC-006` masih `proposed`, `Q-001`..`Q-005` belum dijawab
+- [x] Lingkungan: image MinIO resmi tak dapat ditarik (keterbatasan registry) — **diasingkan lokal** dengan menag ulang gambar `bitnamilegacy/minio` menjadi `minio/minio:latest` + `minio/mc:latest` (isi gambar sama, memuat `minio` dan `mc`) dan `chown` volume ke uid 1001; `make up` kini menjalankan MinIO dan `/health/ready` melaporkan `200` dengan `storage: "ok"`. Compose tetap menunjuk gambar resmi; di lingkungan dengan akses registry normal tidak diperlukan langkah ini.
+- [ ] Penamaan env masih berbeda dari handoff §5.2 (A-018) — perlu keputusan titik tinjau
+- [x] `make lint` bersih: 0 warning, 0 error (2026-10-27)

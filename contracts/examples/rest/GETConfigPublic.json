@@ -22,6 +22,7 @@
       "video_max_mb": 50,
       "max_attachments": 5
     },
-    "disclaimer": "Aplikasi ini bukan pengganti nomor darurat resmi. Untuk kondisi mengancam nyawa, hubungi nomor darurat langsung."
+    "disclaimer": "Aplikasi ini bukan pengganti nomor darurat resmi. Untuk kondisi mengancam nyawa, hubungi nomor darurat langsung.",
+    "sampleMode": true
   }
 }

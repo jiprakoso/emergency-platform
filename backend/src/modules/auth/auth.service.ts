@@ -255,7 +255,7 @@ export class AuthService {
     if (!user || !user.twoFactorSecret) {
       throw new AppError('TWO_FACTOR_INVALID', '2FA belum terdaftar untuk akun ini.');
     }
-    if (!this.totp.verify(dto.code, user.twoFactorSecret)) {
+    if (!this.totp.verifyStored(dto.code, user.twoFactorSecret)) {
       throw new AppError('TWO_FACTOR_INVALID', 'Kode 2FA salah.');
     }
     this.assertAccountActive(user);
@@ -343,8 +343,8 @@ export class AuthService {
     const secret = this.totp.generateSecret();
     const account = user.email ?? user.phone;
     const otpauthUri = this.totp.keyUri(account, secret);
-    // Simpan sementara; aktif setelah `enable` terverifikasi.
-    await this.users.update({ id: userId }, { twoFactorSecret: secret });
+    // Simpan terenkripsi; aktif setelah `enable` terverifikasi.
+    await this.users.update({ id: userId }, { twoFactorSecret: this.totp.seal(secret) });
     return { secret, otpauthUri };
   }
 
@@ -357,7 +357,7 @@ export class AuthService {
     if (!user || !user.twoFactorSecret) {
       throw new AppError('TWO_FACTOR_INVALID', 'Mulai pendaftaran 2FA terlebih dahulu.');
     }
-    if (!this.totp.verify(code, user.twoFactorSecret)) {
+    if (!this.totp.verifyStored(code, user.twoFactorSecret)) {
       throw new AppError('TWO_FACTOR_INVALID', 'Kode 2FA salah.');
     }
     await this.users.update({ id: userId }, { twoFactorEnabled: true });

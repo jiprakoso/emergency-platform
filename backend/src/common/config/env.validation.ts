@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, validateSync } from 'class-validator';
 
 export enum Environment {
   Development = 'development',
@@ -53,15 +53,24 @@ class EnvironmentVariables {
   @IsString()
   MINIO_BUCKET: string = 'attachments';
 
-  @IsBoolean()
+  /**
+   * Nilai boolean env dikirim sebagai string (`'true'`/`'false'`). Dipertahankan
+   * sebagai string karena `enableImplicitConversion` mengubah `Boolean('false')`
+   * menjadi `true`; konversi dilakukan di tempat pemakaian.
+   */
   @IsOptional()
-  MINIO_USE_SSL?: boolean = false;
+  @IsString()
+  MINIO_USE_SSL?: string = 'false';
 
   @IsString()
   AUTH_JWT_SECRET: string = 'dev-jwt-secret-change-me';
 
   @IsString()
   AUTH_REFRESH_SECRET: string = 'dev-refresh-secret-change-me';
+
+  /** Kunci enkripsi rahasia TOTP (handoff §9.5). Wajib diisi: aplikasi gagal start bila kosong. */
+  @IsString()
+  TOTP_ENCRYPTION_KEY: string = 'b55742a101a38645b87d8bdb35532803abea06d542f79c796c507275d2764997';
 
   @IsString()
   @IsOptional()

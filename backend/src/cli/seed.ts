@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import { Command } from 'commander';
 import { AppDataSource } from '../database/data-source';
 import { SeedService } from '../modules/seed/seed.service';
+import { SeedVerifyService } from '../modules/seed/seed-verify.service';
 
 const program = new Command();
 program.name('seed').description('Seed data untuk aplikasi darurat');
@@ -23,9 +25,9 @@ program
   .description('Verifikasi seed V1-V11')
   .action(async () => {
     const ds = await AppDataSource.initialize();
-    const svc = new SeedService(ds);
     try {
-      await svc.verify();
+      const ok = await new SeedVerifyService(ds).verify();
+      if (!ok) process.exitCode = 1;
     } finally {
       await ds.destroy();
     }

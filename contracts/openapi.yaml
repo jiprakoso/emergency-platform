@@ -1018,6 +1018,7 @@ paths:
                                 phone: { type: string }
                           limits: { type: object }
                           disclaimer: { type: string }
+                          sampleMode: { type: boolean }
 
   /incident-types:
     get:

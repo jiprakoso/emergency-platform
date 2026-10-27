@@ -8,3 +8,6 @@ build/
 coverage/
 .vite/
 *.tsbuildinfo
+.freebuff/
+.codegraph/
+freebuff-chat-2026-10-26T04-55-11.188Z.md

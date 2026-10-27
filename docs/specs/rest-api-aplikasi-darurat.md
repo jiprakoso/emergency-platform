@@ -264,7 +264,7 @@ Respons token:
 
 | Method | Path | Izin | Ringkasan |
 |---|---|---|---|
-| GET | `/config/public` | - | `serverTime`, `minAppVersion`, `operatingHours`, `operatingNow`, `emergencyContacts` (112, 118/119, damkar, BPBD), `limits` (ukuran berkas, jumlah lampiran), `disclaimer` |
+| GET | `/config/public` | - | `serverTime`, `minAppVersion`, `operatingHours`, `operatingNow`, `emergencyContacts` (nomor **contoh**, bukan nomor asli), `limits` (ukuran berkas, jumlah lampiran), `disclaimer`, `sampleMode` (lencana MODE SAMPEL; lihat CC-007) |
 | GET | `/incident-types` | auth | Daftar jenis kejadian aktif (`code`, `name`, `category`, `allowsConditionReport`) |
 | GET | `/regions` | auth | Filter `level`, `parentId`. Tanpa polygon (ringan) |
 | GET | `/regions/resolve?lat=&lng=` | auth | Menentukan kecamatan/kelurahan dari titik. Respons: `{ inServiceArea, district, village }` |

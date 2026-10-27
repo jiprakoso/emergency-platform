@@ -61,6 +61,19 @@ Usulan yang **belum** diterapkan (menunggu keputusan manusia di titik tinjau C0)
 - Alasan: dokumen diam; banyak operasi hanya menunjukkan sukses tanpa body.
 - Status: proposed
 
+## CC-007: Tambah `sampleMode` pada `GET /config/public`
+- Tanggal: 2026-10-26
+- Sumber: seed (§8 `sample_mode`, skenario V7) vs REST (§5.2)
+- Usulan: tambahkan field boolean `sampleMode` ke respons `GET /config/public`
+  (openapi + dokumen REST §5.2), diisi dari `system_settings.sample_mode`
+  (default `true` pada aplikasi sampel).
+- Alasan: skenario V7 mensyaratkan `/config/public` mengembalikan
+  `sampleMode = true` agar klien menampilkan lencana **MODE SAMPEL**; dokumen
+  REST §5.2 dan kontrak sebelumnya tidak memuat field ini (pertentangan antar-dokumen).
+- Dampak: penambahan field opsional; tidak merusak klien lama. Contoh JSON
+  `GETConfigPublic` ikut diperbarui.
+- Status: applied (menunggu konfirmasi C0) — diputuskan pemilik 2026-10-26.
+
 ## CC-006: Respons tak-tertiping (generic `object`)
 - Tanggal: 2026-10-05
 - Sumber: REST (`alerts`, `notifications`, `events`, `incident-types`, `roles`,

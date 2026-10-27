@@ -20,13 +20,34 @@ export class RegionLookupService {
   /** Kelurahan yang memuat titik (level VILLAGE), bila ada. */
   async findByPoint(lng: number, lat: number): Promise<Region | null> {
     const rows = await this.regions.query(
-      `SELECT * FROM regions
+      `SELECT id, parent_id, level, code, name, created_at, updated_at FROM regions
        WHERE level = 'VILLAGE' AND boundary IS NOT NULL
          AND ST_Contains(boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
        LIMIT 1`,
       [lng, lat],
     );
-    return rows.length > 0 ? (rows[0] as Region) : null;
+    if (rows.length === 0) return null;
+    // Query mentah memakai nama kolom snake_case — petakan ke properti entitas.
+    const row = rows[0] as {
+      id: string;
+      parent_id: string | null;
+      level: Region['level'];
+      code: string;
+      name: string;
+      created_at: Date;
+      updated_at: Date;
+    };
+    return {
+      id: row.id,
+      parentId: row.parent_id,
+      level: row.level,
+      code: row.code,
+      name: row.name,
+      boundary: null,
+      centroid: null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   async resolve(lng: number, lat: number): Promise<ResolvedRegion> {

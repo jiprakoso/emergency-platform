@@ -69,3 +69,39 @@ Bila kosong, sesi tetap dibuat tanpa baris `device_tokens`. `POST /me/devices`
 `session:revoked:<sid>` (TTL 24 jam); `JwtAuthGuard` menolak access token yang sesinya
 sudah dicabut (bukan hanya menunggu kedaluwarsa). Event WS `session.revoked` menyusul
 di Fase 4.
+
+## A-014: Kata sandi Argon2id (+ jalur hash bcrypt lama)
+Kata sandi memakai **Argon2id** (`argon2`, handoff §9.5) — diputuskan pemilik
+2026-10-26. Hash bcrypt (`$2*`) dari iterasi seed awal tetap diverifikasi agar
+akun demo lama tidak terkunci, dan ditingkatkan ke Argon2 saat `seed:base`
+berikutnya. `bcryptjs` tetap dipertahankan hanya untuk jalur verifikasi lama.
+
+## A-015: Enkripsi rahasia TOTP
+Rahasia TOTP disimpan terenkripsi AES-256-GCM dengan kunci env
+`TOTP_ENCRYPTION_KEY` (64 heksadesimal, base64 32 byte, atau frasa bebas yang
+mendapat hash SHA-256) — handoff §9.5. Bentuk nilai tersimpan:
+`enc:v1.<iv>.<tag>.<cipher>` (base64url). Nilai tanpa awalan dianggap plaintext
+(data sebelum enkripsi) sehingga tidak perlu migrasi data. `TOTP_ENCRYPTION_KEY`
+wajib diisi dan aplikasi gagal start bila kosong (`.env.example` berisi nilai
+contoh dev).
+
+## A-016: Arti `inServiceArea` pada `GET /regions/resolve`
+`inServiceArea` = titik berada di dalam kelurahan (cakupan Kota Contoh), bukan
+pengecekan per-organisasi. Bila kelurahan tidak ditemukan, `district`/`village`
+bernilai `null` dan `inServiceArea: false`.
+
+## A-017: `seed:base` menormalkan data dasar
+`seed:base` mengisi **dan menormalkan** data dasar terhadap daftar seed §3-§8:
+akun/unit/jenis kejadian di luar daftar dihapus **bila belum menjadi rujukan
+data domain** (laporan, incident, dispatch, lampiran, audit, shift) dan dilewati
+dengan peringatan bila sudah. Posisi serta status unit yang sudah ada tidak
+ditimpa agar keadaan demo berjalan tidak terganggu. Normalisasi ini yang
+memungkinkan V1 memeriksa jumlah persis.
+
+## A-018: Nama variabel lingkungan backend
+Implementasi memakai `DB_HOST`/`DB_PORT`/`DB_USERNAME`/`DB_PASSWORD`/`DB_NAME`,
+`REDIS_HOST`/`REDIS_PORT`, `MINIO_*`, dan `NODE_ENV` — bukan `DATABASE_URL`,
+`REDIS_URL`, dan `ENV` pada handoff §5.2. `SAMPLE_MODE` diwakili oleh
+`system_settings.sample_mode` (dibaca oleh `/config/public`). Penyelarasan nama
+env dengan handoff ditunda dan perlu keputusan di titik tinjau; bukan perubahan
+kontrak.

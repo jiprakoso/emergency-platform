@@ -2,7 +2,16 @@
 
 up:
 	@echo "Starting dev services..."
-	docker compose -f infra/docker-compose.dev.yml up -d
+	docker compose -f infra/docker-compose.dev.yml up -d postgres redis
+	@docker compose -f infra/docker-compose.dev.yml up -d minio minio-init \
+		|| echo "PERINGATAN: MinIO tidak dapat ditarik/dijalankan di lingkungan ini (keterbatasan registry); lanjut tanpa object storage."
+	@echo "==> menunggu postgres siap"
+	@i=0; until docker exec ep-postgres-dev pg_isready -U postgres >/dev/null 2>&1; do \
+		i=$$((i+1)); if [ $$i -ge 30 ]; then echo "postgres tidak siap"; exit 1; fi; sleep 2; done
+	@echo "==> menjalankan migrasi"
+	$(MAKE) migrate
+	@echo "==> menjalankan seed:base"
+	$(MAKE) seed
 	@echo "Services started (postgres+postgis, redis, minio)."
 
 down:
@@ -19,16 +28,19 @@ migrate-revert:
 	cd backend && corepack pnpm migration:revert
 
 seed:
-	@echo "seed: belum diimplementasikan (Fase 1)."
+	@echo "==> menjalankan seed:base"
+	cd backend && corepack pnpm seed:base
 
 reset-live:
-	@echo "reset-live: belum diimplementasikan (Fase 6)."
+	@echo "==> menjalankan seed:reset-live"
+	cd backend && corepack pnpm seed:reset-live
 
 verify:
-	@echo "verify: belum diimplementasikan (Fase 1)."
+	@echo "==> menjalankan seed:verify (V1-V11)"
+	cd backend && corepack pnpm seed:verify
 
 test:
-	@echo "test: belum diimplementasikan (Fase 1)."
+	@echo "test: framework tes backend belum dipasang (lihat PROGRESS.md Fase 1)."
 
 lint:
 	@echo "==> lint backend"

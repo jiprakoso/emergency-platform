@@ -1,8 +1,31 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import { IsLatitude, IsLongitude, IsNumber, IsOptional, IsString } from 'class-validator';
 import { ReferenceService } from './reference.service';
 import { Public } from '../auth/auth.decorators';
 import { envelope } from '../../common/envelope';
 import { PageQueryDto } from '../../common/pagination/page-query.dto';
+
+/** Query `GET /regions` (REST §5.2). */
+class RegionsQueryDto extends PageQueryDto {
+  @IsOptional()
+  @IsString()
+  level?: string;
+
+  @IsOptional()
+  @IsString()
+  parentId?: string;
+}
+
+/** Query `GET /regions/resolve` (REST §5.2). */
+class RegionResolveQueryDto {
+  @IsNumber()
+  @IsLatitude()
+  lat!: number;
+
+  @IsNumber()
+  @IsLongitude()
+  lng!: number;
+}
 
 @Controller()
 export class ReferenceController {
@@ -20,13 +43,18 @@ export class ReferenceController {
   }
 
   @Get('regions')
-  async regions(@Query() q: PageQueryDto & { level?: string; parentId?: string }) {
-    const res = await this.svc.getRegions({ level: q.level, parentId: q.parentId, limit: q.limit, cursor: q.cursor });
+  async regions(@Query() q: RegionsQueryDto) {
+    const res = await this.svc.getRegions({
+      level: q.level,
+      parentId: q.parentId,
+      limit: q.limit,
+      cursor: q.cursor,
+    });
     return { data: res.data, page: res.page };
   }
 
-  @Get('regions/:id')
-  async regionById(@Param('id') id: string) {
-    return envelope(await this.svc.getRegionsById(id));
+  @Get('regions/resolve')
+  async regionsResolve(@Query() q: RegionResolveQueryDto) {
+    return envelope(await this.svc.resolvePoint(q.lng, q.lat));
   }
 }

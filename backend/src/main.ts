@@ -23,7 +23,8 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-  app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/ready'] });
+  // Kesehatan ikut di bawah prefix versi (kontrak `GET /health`, `/health/ready`).
+  app.setGlobalPrefix('api/v1');
   const port = process.env.PORT || 3000;
   await app.listen(port);
 }
