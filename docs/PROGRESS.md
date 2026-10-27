@@ -67,7 +67,7 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - [x] Rahasia TOTP **terenkripsi AES-256-GCM** dengan `TOTP_ENCRYPTION_KEY` (handoff §9.5, A-015)
 - Status: SELESAI (1b) - smoke test end-to-end hijau (OTP/register/login warga, login staf tanpa & dengan 2FA, setup/enable 2FA, ganti sandi, refresh rotasi + reuse, logout + penolakan token pasca-logout, `/me` warga & staf, `homeRegion` + topik distrik, `/me/devices`, `/me/alert-topics`)
 - Asumsi: A-010..A-013
-- Catatan: CRUD administrasi (organizations/units/settings/staff/roles + `/config/public` tulis) masih lanjutan 1c. Belum ada framework tes otomatis (`backend` `test` masih placeholder) — lihat "Sisa gerbang Fase 1".
+- Catatan: CRUD administrasi (organizations/units/settings/staff/roles + `/config/public` tulis) masih lanjutan 1c. Tes otomatis (Jest) ditambahkan 2026-10-27 — lihat "Tes otomatis" di bawah.
 
 ### 1c - Data referensi, config publik, seed (sebagian selesai)
 - [x] `GET /config/public`: kunci `system_settings` diselaraskan dengan seed §8 (`min_app_version`, `operating_hours`, `emergency_contacts`, `limits`, `disclaimer`, `sample_mode`) — sebelumnya semua pengaturan seed terlewat dan fallback memakai **nomor darurat asli**
@@ -87,8 +87,23 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - Perbaikan pada verifikasi: `/health` & `/health/ready` kini ikut prefix `api/v1` sesuai kontrak (sebelumnya dikecualikan → 404 pada URL kontrak); `MINIO_USE_SSL` diparse eksplisit (`enableImplicitConversion` mengubah `'false'` menjadi `true` sehingga probe memakai HTTPS dan selalu gagal).
 
 ## Sisa gerbang Fase 1 (BELUM)
-- [ ] **Tes otomatis belum ada**: `pnpm test` masih placeholder, 0 berkas `*.spec.ts`, tidak ada Jest/Vitest → gerbang "tes autentikasi (OTP, rotasi refresh, deteksi pemakaian ulang, 2FA)" dan "tes permission (matriks)" belum terpenuhi; `make test` tidak menjalankan apa pun
+- [x] **Tes otomatis** (2026-10-27): Jest + ts-jest terpasang; 6 berkas `*.spec.ts`, **45 tes** hijau; `make test` = `pnpm test` — memenuhi gerbang "tes autentikasi (OTP, rotasi refresh, deteksi pemakaian ulang, 2FA)" dan "tes permission (matriks)" (rincian di "Tes otomatis").
 - [ ] Titik tinjau **C0** belum tercatat disetujui di `DECISIONS.md`; `CC-003`..`CC-006` masih `proposed`, `Q-001`..`Q-005` belum dijawab
 - [x] Lingkungan: image MinIO resmi tak dapat ditarik (keterbatasan registry) — **diasingkan lokal** dengan menag ulang gambar `bitnamilegacy/minio` menjadi `minio/minio:latest` + `minio/mc:latest` (isi gambar sama, memuat `minio` dan `mc`) dan `chown` volume ke uid 1001; `make up` kini menjalankan MinIO dan `/health/ready` melaporkan `200` dengan `storage: "ok"`. Compose tetap menunjuk gambar resmi; di lingkungan dengan akses registry normal tidak diperlukan langkah ini.
 - [ ] Penamaan env masih berbeda dari handoff §5.2 (A-018) — perlu keputusan titik tinjau
+- [ ] **Catatan keamanan (non-blokir)**: deteksi pemakaian ulang refresh hanya mencabut baris sesi di basis data; penyangga Redis `session:revoked:<sid>` tidak ditulis, sehingga access token yang sudah terbit tetap berlaku sampai kedaluwarsa (≤15 menit). Putuskan apakah cabut sesi juga harus menghapus token akses.
 - [x] `make lint` bersih: 0 warning, 0 error (2026-10-27)
+
+## Tes otomatis (Jest) — 2026-10-27
+- Infrastruktur: `jest` + `ts-jest` + `@types/jest` (dev dependency), `backend/jest.config.js`, `tsconfig.spec.json`, `make test` → `pnpm test`; `src/testing/` dikeluarkan dari build (`tsconfig.build.json`).
+- Strategi: **hermetic** (tanpa Postgres/Redis sungguhan) — lapisan persistensi di-*fake* di `src/testing/fakes.ts` (repository in-memory dengan pencocokan `where`, query-builder mini, Redis in-memory), sedangkan layanan yang diuji tetap nyata (Argon2, TOTP, JWT, hash SHA-256, logika rotasi & matriks).
+- Paket ESM di node_modules: `@scure/base`/`@noble`/`@otplib` ditransformasi ts-jest; `@nestjs/terminus` dipetakan ke stub (`moduleNameMapper`) karena tidak terpakai pada jalur yang diuji.
+- Cakupan (6 suite, 45 tes):
+  - `permissions.catalog.spec.ts` — integritas matriks: 38 izin unik, 7 role ber-nama, tanpa duplikat, seluruh izin terdistribusi, jumlah izin per role, SUPERVISOR ⊇ DISPATCHER, batasan kerahasiaan (CITIZEN/RESPONDER tanpa `pii.reveal_reporter`/`incident.read_all`), `role.manage`/`settings.manage` hanya SUPER_ADMIN.
+  - `permission.service.spec.ts` — peran pengguna, gabungan izin lintas role, cache Redis (hit tidak menyentuh DB), `hasPermission`/`hasAnyPermission`, `invalidate`.
+  - `permission.guard.spec.ts` — lewat tanpa `@RequirePermission`, 401 tanpa pengguna, 403 saat izin kurang, pemanggilan `hasAnyPermission` dengan daftar izin yang benar.
+  - `otp.service.spec.ts` — kode disimpan sebagai hash (tidak plaintext), verifikasi benar/salah, tujuan berbeda ditolak, kedaluwarsa, batas 5 percobaan, kode terpakai tidak bisa dipakai ulang.
+  - `session.service.spec.ts` — hash disimpan, rotasi (hash baru + tanda hash lama), deteksi pemakaian ulang → `REFRESH_TOKEN_REUSED` + sesi dicabut, token tak dikenal/kedaluwarsa, logout mencabut sesi + token perangkat, daftar sesi aktif.
+  - `auth.service.spec.ts` — login staf (token tanpa `permissions` di payload), kata sandi salah, akun ditangguhkan, 2FA: setup tersimpan terenkripsi `enc:v1.`, enable kode salah/benar, challenge vs token, `login/2fa` (kode benar/salah, challenge rusak, rahasia hilang), rotasi refresh + pemakaian ulang mematikan rantai refresh.
+- Keterbatasan: cakupan setara-layanan (unit), bukan uji HTTP end-to-end; uji integrasi dengan DB/Redis sungguhan belum ada.
+- Hasil: `make test` 45/45 hijau; `make lint`, `typecheck`, `build` tetap hijau (2026-10-27).

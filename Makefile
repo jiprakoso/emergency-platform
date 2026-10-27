@@ -40,7 +40,8 @@ verify:
 	cd backend && corepack pnpm seed:verify
 
 test:
-	@echo "test: framework tes backend belum dipasang (lihat PROGRESS.md Fase 1)."
+	@echo "==> menjalankan tes backend (Jest)"
+	cd backend && corepack pnpm test
 
 lint:
 	@echo "==> lint backend"
