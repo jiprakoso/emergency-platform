@@ -14,6 +14,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { MeModule } from './modules/me/me.module';
 import { ReferenceModule } from './modules/reference/reference.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { IncidentsModule } from './modules/incidents/incidents.module';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { ReferenceModule } from './modules/reference/reference.module';
     AuthModule,
     MeModule,
     ReferenceModule,
+    AttachmentsModule,
+    ReportsModule,
+    IncidentsModule,
     HealthModule,
   ],
   providers: [
