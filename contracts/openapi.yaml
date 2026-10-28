@@ -216,7 +216,7 @@ components:
 
     Severity:
       type: string
-      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+      enum: [LOW, MEDIUM, HIGH, MASS]
 
     ReportKind:
       type: string
@@ -241,7 +241,7 @@ components:
     AlertLevel:
       type: string
       description: Konfigurabel (system_settings.alert_levels)
-      enum: [INFO, WARNING, ALERT, EMERGENCY]
+      enum: [WASPADA, SIAGA, AWAS]
 
     AlertStatus:
       type: string
@@ -559,7 +559,7 @@ components:
       required: [id, category, level, status, title, body, deliveryMode, createdAt]
       properties:
         id: { type: string, format: uuid }
-        category: { type: string }
+        category: { type: string, enum: [FLOOD, EARTHQUAKE, WEATHER, LANDSLIDE, OTHER] }
         level: { $ref: '#/components/schemas/AlertLevel' }
         status: { $ref: '#/components/schemas/AlertStatus' }
         title: { type: string }

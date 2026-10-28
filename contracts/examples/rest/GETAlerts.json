@@ -2,8 +2,8 @@
   "data": [
     {
       "id": "99999999-9999-4999-8999-999999999901",
-      "category": "BANJIR",
-      "level": "INFO",
+      "category": "FLOOD",
+      "level": "WASPADA",
       "status": "ACTIVE",
       "title": "Cuaca buruk di Kec. Sinar",
       "body": "Hujan lebat diperkirakan sampai sore.",
@@ -18,8 +18,8 @@
     },
     {
       "id": "99999999-9999-4999-8999-999999999902",
-      "category": "BANJIR",
-      "level": "WARNING",
+      "category": "FLOOD",
+      "level": "SIAGA",
       "status": "ACTIVE",
       "title": "Genangan air di Kel. Mawar",
       "body": "Jalur utama terendam 20 cm.",

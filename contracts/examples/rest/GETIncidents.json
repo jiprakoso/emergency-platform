@@ -90,7 +90,7 @@
         "name": "Banjir"
       },
       "status": "VERIFIED",
-      "severity": "CRITICAL",
+      "severity": "MASS",
       "district": {
         "code": "99.99.03",
         "name": "Kec. Muara"

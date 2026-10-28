@@ -338,7 +338,7 @@ export class CoreSchema1700000001000 implements MigrationInterface {
         report_id uuid REFERENCES incident_reports(id),
         dispatch_id uuid,
         uploaded_by uuid REFERENCES users(id),
-        kind varchar(10) NOT NULL CHECK (kind IN ('PHOTO','VIDEO')),
+        kind varchar(10) NOT NULL CHECK (kind IN ('PHOTO','VIDEO','IMAGE','DOCUMENT')),
         status varchar(12) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','CONFIRMED')),
         confirmed_at timestamptz,
         storage_key varchar(255) NOT NULL,
@@ -525,7 +525,7 @@ export class CoreSchema1700000001000 implements MigrationInterface {
       CREATE TABLE notifications (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        kind varchar(24) NOT NULL CHECK (kind IN ('DISPATCH_OFFER','INCIDENT_UPDATE','ALERT','RESOURCE_REQUEST','SYSTEM')),
+        kind varchar(24) NOT NULL CHECK (kind IN ('DISPATCH_OFFER','INCIDENT_UPDATE','ALERT','RESOURCE_REQUEST','SYSTEM','REPORT_UPDATE')),
         title varchar(200) NOT NULL,
         body text NOT NULL,
         priority varchar(8) NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('HIGH','NORMAL')),

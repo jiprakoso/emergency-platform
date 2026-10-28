@@ -1,8 +1,8 @@
 {
   "data": {
     "id": "99999999-9999-4999-8999-999999999903",
-    "category": "BANJIR",
-    "level": "EMERGENCY",
+    "category": "FLOOD",
+    "level": "AWAS",
     "status": "CLOSED",
     "title": "Banjir surut",
     "body": "Air telah surut.",

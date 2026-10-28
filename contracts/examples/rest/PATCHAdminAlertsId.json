@@ -1,8 +1,8 @@
 {
   "data": {
     "id": "99999999-9999-4999-8999-999999999901",
-    "category": "BANJIR",
-    "level": "INFO",
+    "category": "FLOOD",
+    "level": "WASPADA",
     "status": "DRAFT",
     "title": "Uji siaga banjir (revisi teks)",
     "body": "Ini adalah draft alert uji.",
