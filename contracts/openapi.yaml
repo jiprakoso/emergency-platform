@@ -265,11 +265,11 @@ components:
 
     RegionLevel:
       type: string
-      enum: [PROVINCE, DISTRICT, VILLAGE]
+      enum: [CITY, DISTRICT, VILLAGE]
 
     OrganizationType:
       type: string
-      enum: [POLICE, FIRE, AMBULANCE, BPBD, HOSPITAL, OTHER]
+      enum: [COMMAND_CENTER, POLICE, FIRE, HOSPITAL, BPBD, AMBULANCE_SERVICE, PRIVATE_FIRE, DISHUB, OTHER]
 
     MilestoneCode:
       type: string
@@ -552,6 +552,319 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
+    # --- CC-006: skema eksplisit per resource (diturunkan dari contoh + ERD) ---
+    AlertView:
+      type: object
+      description: "Alert bencana (warga & admin). level/category mengikuti daftar terkonfigurasi."
+      required: [id, category, level, status, title, body, deliveryMode, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string }
+        level: { $ref: '#/components/schemas/AlertLevel' }
+        status: { $ref: '#/components/schemas/AlertStatus' }
+        title: { type: string }
+        body: { type: string }
+        instruction: { type: [string, 'null'] }
+        deliveryMode: { $ref: '#/components/schemas/DeliveryMode' }
+        regionIds: { type: array, items: { type: string } }
+        startsAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    NotificationView:
+      type: object
+      description: "Notifikasi in-app milik pengguna"
+      required: [id, kind, title, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        title: { type: string }
+        body: { type: string }
+        readAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    IncidentEventView:
+      type: object
+      description: "Entri log event incident (termasuk milestone dan catatan)"
+      required: [id, type, occurredAt]
+      properties:
+        id: { type: string, example: '1001' }
+        type: { type: string }
+        occurredAt: { type: string, format: date-time }
+        actorName: { type: string }
+        channel: { $ref: '#/components/schemas/Channel' }
+        code: { $ref: '#/components/schemas/MilestoneCode' }
+        note: { type: string }
+
+    SyncEventView:
+      type: object
+      description: "Entri ringkas untuk sinkronisasi reconnect"
+      required: [id, type, incidentId, occurredAt]
+      properties:
+        id: { type: string, example: '1007' }
+        type: { type: string }
+        incidentId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+
+    IncidentTypeView:
+      type: object
+      description: "Jenis kejadian"
+      required: [code, name, category]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        category: { type: string, enum: [TRAFFIC, FIRE, MEDICAL, NATURAL_DISASTER, OTHER] }
+
+    RoleView:
+      type: object
+      description: "Ringkas role"
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+
+    RoleDetailView:
+      type: object
+      description: "Role beserta kumpulan kode permission yang melekat padanya"
+      required: [code, name, permissions]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        permissions: { type: array, items: { type: string } }
+
+    SystemSettingsView:
+      type: object
+      description: "Pengaturan sistem (system_settings, seed §8)"
+      properties:
+        offer_timeout_seconds: { type: integer }
+        fcm.resend_after_seconds: { type: integer }
+        offer_unseen_seconds: { type: integer }
+        unhandled_incident_escalation_minutes: { type: integer }
+        auto_close_hours: { type: integer }
+        incident_lock_seconds: { type: integer }
+        fcm.stale_token_days: { type: integer }
+        fcm.max_tokens_per_user: { type: integer }
+        gps_accuracy_warn_m: { type: integer }
+        min_app_version: { type: string }
+        map_default:
+          type: object
+          required: [lat, lng, zoom]
+          properties:
+            lat: { type: number }
+            lng: { type: number }
+            zoom: { type: integer }
+        limits:
+          type: object
+          required: [photo_max_mb, video_max_mb, max_attachments]
+          properties:
+            photo_max_mb: { type: integer }
+            video_max_mb: { type: integer }
+            max_attachments: { type: integer }
+        report_rate_limit:
+          type: object
+          properties:
+            help_request:
+              type: object
+              properties:
+                count: { type: integer }
+                window_min: { type: integer }
+                daily: { type: integer }
+            condition_report:
+              type: object
+              properties:
+                count: { type: integer }
+                window_min: { type: integer }
+        alert_rate_limit:
+          type: object
+          properties:
+            per_hour_per_region: { type: integer }
+        operating_hours:
+          type: object
+          required: [timezone, mode]
+          properties:
+            timezone: { type: string }
+            mode: { type: string }
+        alert_levels:
+          type: array
+          items:
+            type: object
+            required: [code, name]
+            properties:
+              code: { type: string }
+              name: { type: string }
+              fcm_class: { type: string }
+              require_typed_confirmation: { type: boolean }
+        emergency_contacts:
+          type: array
+          items:
+            type: object
+            required: [name, phone]
+            properties:
+              name: { type: string }
+              phone: { type: string }
+              note: { type: string }
+        disclaimer: { type: string }
+        sample_mode: { type: boolean }
+
+    ActorRef:
+      type: object
+      description: "Referensi orang (pengguna) untuk tampilan"
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+
+    ShiftView:
+      type: object
+      description: "Shift dispatcher"
+      required: [id, startedAt, startedBy]
+      properties:
+        id: { type: string, format: uuid }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        startedBy: { $ref: '#/components/schemas/ActorRef' }
+        openIncidents: { type: integer }
+        handoverNote: { type: [string, 'null'] }
+        handedOverTo: { $ref: '#/components/schemas/ActorRef' }
+
+    ShiftHandoverView:
+      type: object
+      description: "Shift yang sudah berakhir, untuk serah terima"
+      required: [shiftId, endedAt, endedBy]
+      properties:
+        shiftId: { type: string, format: uuid }
+        endedAt: { type: string, format: date-time }
+        endedBy: { $ref: '#/components/schemas/ActorRef' }
+        note: { type: [string, 'null'] }
+
+    ConditionReportView:
+      type: object
+      description: "Laporan kondisi ringkas untuk peta"
+      required: [reportId, typeCode, createdAt]
+      properties:
+        reportId: { type: string, format: uuid }
+        typeCode: { type: string }
+        district: { $ref: '#/components/schemas/RegionRef' }
+        location: { $ref: '#/components/schemas/Coordinates' }
+        createdAt: { type: string, format: date-time }
+
+    SessionView:
+      type: object
+      description: "Sesi login milik pengguna"
+      required: [id, platform, appFlavor, createdAt, current]
+      properties:
+        id: { type: string, format: uuid }
+        platform: { type: string, enum: [ANDROID, IOS, WEB] }
+        appFlavor: { type: string, enum: [CITIZEN, STAFF] }
+        appVersion: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, 'null'], format: date-time }
+        current: { type: boolean }
+
+    # --- CC-005: entitas yang dikembalikan oleh operasi mutasi ---
+    IncidentLockView:
+      type: object
+      description: "Kunci incident (hasil ambil/perpanjang kunci)"
+      required: [lockedBy, lockedAt, expiresAt]
+      properties:
+        lockedBy: { type: [string, 'null'], format: uuid }
+        lockedAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+
+    CasualtyRecordView:
+      type: object
+      description: "Riwayat jumlah korban yang baru dicatat"
+      required: [id, injured, deceased, reportedAt]
+      properties:
+        id: { type: string, format: uuid }
+        injured: { type: integer }
+        deceased: { type: integer }
+        critical: { type: [integer, 'null'] }
+        missing: { type: [integer, 'null'] }
+        note: { type: [string, 'null'] }
+        reportedAt: { type: string, format: date-time }
+
+    ResourceRequestView:
+      type: object
+      description: "Permintaan bantuan tambahan dari organisasi lead"
+      required: [id, incident, resourceType, quantity, urgency, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        incident: { $ref: '#/components/schemas/IncidentRef' }
+        resourceType: { type: string }
+        quantity: { type: integer }
+        urgency: { $ref: '#/components/schemas/Urgency' }
+        reason: { type: [string, 'null'] }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, CANCELLED] }
+        requestedBy: { $ref: '#/components/schemas/ActorRef' }
+        createdAt: { type: string, format: date-time }
+
+    OrganizationView:
+      type: object
+      description: "Organisasi"
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/OrganizationType' }
+        phone: { type: string }
+        serviceAreas:
+          type: array
+          items: { $ref: '#/components/schemas/RegionRef' }
+
+    UnitAdminView:
+      type: object
+      description: "Unit untuk keperluan administrasi dan pembaruan status/lokasi"
+      required: [id, name, unitType, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        unitType: { type: string, enum: [AMBULANCE, FIRE_ENGINE, RESCUE_TEAM, ER, PATROL, OTHER] }
+        status: { $ref: '#/components/schemas/UnitStatus' }
+        plateNumber: { type: string }
+        lastLocation: { $ref: '#/components/schemas/Coordinates' }
+        lastLocationAt: { type: string, format: date-time }
+
+    StaffView:
+      type: object
+      description: "Akun staf pada sebuah organisasi"
+      required: [id, fullName, roles, status, mustChangePassword]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        roles: { type: array, items: { type: string } }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        mustChangePassword: { type: boolean }
+
+    UserAdminView:
+      type: object
+      description: "Pengguna untuk keperluan administrasi"
+      required: [id, fullName, userType, roles, status]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        userType: { type: string, enum: [CITIZEN, STAFF] }
+        roles: { type: array, items: { type: string } }
+        status: { $ref: '#/components/schemas/UserStatus' }
+
+    SettingEntryView:
+      type: object
+      description: "Satu pengaturan sistem"
+      required: [key, value]
+      properties:
+        key: { type: string }
+        value:
+          description: "Nilai pengaturan (tipe bebas sesuai kunci)"
+
+    AttachmentView:
+      description: "Status lampiran setelah konfirmasi"
+      allOf:
+        - $ref: '#/components/schemas/AttachmentRef'
+        - type: object
+          required: [id, status]
+          properties:
+            status: { type: string, enum: [PENDING, CONFIRMED] }
+
   responses:
     Unauthorized:
       description: 401 — Token tidak ada/kedaluwarsa
@@ -809,6 +1122,11 @@ paths:
               schema:
                 allOf:
                   - $ref: '#/components/schemas/PageEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/SessionView' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /auth/sessions/{id}:
@@ -1031,7 +1349,14 @@ paths:
           description: Daftar
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/IncidentTypeView' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /regions:
@@ -1164,7 +1489,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Terkonfirmasi }
+        '200':
+          description: Terkonfirmasi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AttachmentView' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -1362,7 +1696,16 @@ paths:
               properties:
                 reason: { type: string }
       responses:
-        '200': { description: Berhasil dicatat }
+        '200':
+          description: Berhasil dicatat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CitizenReportView' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /reports/{id}/reveal-contact:
@@ -1543,7 +1886,16 @@ paths:
                 location: { $ref: '#/components/schemas/Coordinates' }
                 addressText: { type: string }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -1569,7 +1921,16 @@ paths:
               properties:
                 force: { type: boolean, description: Butuh incident.lock_override }
       responses:
-        '200': { description: Kunci diambil }
+        '200':
+          description: Kunci diambil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/IncidentLockView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
     delete:
@@ -1599,7 +1960,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Diperpanjang }
+        '200':
+          description: Diperpanjang
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/IncidentLockView' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /incidents/{id}/verify:
@@ -1627,7 +1997,16 @@ paths:
                 leadOrganizationId: { type: [string, 'null'], format: uuid }
                 summary: { type: string }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -1655,7 +2034,16 @@ paths:
                 version: { type: integer }
                 reason: { type: string }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /incidents/{id}/merge:
@@ -1683,7 +2071,16 @@ paths:
                 targetIncidentId: { type: string, format: uuid }
                 reason: { type: string }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /incidents/{id}/nearby:
@@ -1734,7 +2131,16 @@ paths:
                 organizationId: { type: string, format: uuid }
                 reason: { type: string }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /incidents/{id}/resolve:
@@ -1761,7 +2167,16 @@ paths:
                 note: { type: string }
                 forceCloseDispatches: { type: boolean }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /incidents/{id}/close:
@@ -1787,7 +2202,16 @@ paths:
                 version: { type: integer }
                 note: { type: string }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DispatcherViewIncident' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /incidents/{id}/notes:
@@ -1813,8 +2237,16 @@ paths:
                 text: { type: string }
                 visibility: { $ref: '#/components/schemas/NoteVisibility' }
       responses:
-        '201': { description: Dibuat }
-
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/IncidentEventView' }
   /incidents/{id}/reports:
     get:
       tags: [incidents]
@@ -1861,8 +2293,16 @@ paths:
                 missing: { type: integer }
                 note: { type: string }
       responses:
-        '201': { description: Dicatat }
-
+        '201':
+          description: Dicatat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CasualtyRecordView' }
   /incidents/{id}/milestones:
     post:
       tags: [incidents]
@@ -1888,7 +2328,16 @@ paths:
                 payload: { type: object }
                 occurredAt: { type: string, format: date-time }
       responses:
-        '201': { description: Dicatat }
+        '201':
+          description: Dicatat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/IncidentEventView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /incidents/{id}/events:
@@ -1911,8 +2360,14 @@ paths:
           description: Event
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PageEnvelope' }
-
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/IncidentEventView' }
   /incidents/{id}/dispatch-recommendations:
     get:
       tags: [incidents]
@@ -2056,7 +2511,16 @@ paths:
                 occurredAt: { type: string, format: date-time }
                 note: { type: string }
       responses:
-        '201': { description: Dicatat }
+        '201':
+          description: Dicatat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -2083,7 +2547,16 @@ paths:
                 unitId: { type: string, format: uuid }
                 etaMinutes: { type: integer }
       responses:
-        '201': { description: Dibuat }
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -2149,7 +2622,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OfferView' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /dispatches/{id}/accept:
@@ -2211,7 +2693,16 @@ paths:
               properties:
                 reason: { type: string }
       responses:
-        '200': { description: Ditolak }
+        '200':
+          description: Ditolak
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OfferView' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /dispatches/{id}/status:
@@ -2244,7 +2735,16 @@ paths:
                 outcomeNote: { type: string }
                 channel: { $ref: '#/components/schemas/Channel' }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -2277,7 +2777,16 @@ paths:
                     critical: { type: integer }
                 etaMinutes: { type: integer }
       responses:
-        '201': { description: NOTIFY ke IGD dibuat }
+        '201':
+          description: NOTIFY ke IGD dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitView' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /dispatches/{id}/cancel:
@@ -2303,7 +2812,16 @@ paths:
               properties:
                 reason: { type: string }
       responses:
-        '200': { description: Dibatalkan }
+        '200':
+          description: Dibatalkan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   # ==== 5.7 Resource request ====
@@ -2332,7 +2850,16 @@ paths:
                 urgency: { $ref: '#/components/schemas/Urgency' }
                 reason: { type: string }
       responses:
-        '201': { description: Dibuat }
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ResourceRequestView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /resource-requests:
@@ -2386,7 +2913,16 @@ paths:
                       type: { $ref: '#/components/schemas/DispatchType' }
                       note: { type: string }
       responses:
-        '200': { description: 'Disetujui, dispatch terbentuk' }
+        '200':
+          description: Disetujui, dispatch terbentuk
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ResourceRequestView' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /resource-requests/{id}/reject:
@@ -2411,7 +2947,16 @@ paths:
               properties:
                 note: { type: string }
       responses:
-        '200': { description: Ditolak }
+        '200':
+          description: Ditolak
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ResourceRequestView' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /resource-requests/{id}:
@@ -2453,7 +2998,16 @@ paths:
               properties:
                 status: { $ref: '#/components/schemas/UnitStatus' }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitAdminView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /units/{id}/location:
@@ -2481,7 +3035,16 @@ paths:
                 accuracyM: { type: number }
                 recordedAt: { type: string, format: date-time }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitAdminView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /units:
@@ -2529,7 +3092,14 @@ paths:
           description: Daftar
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PageEnvelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AlertView' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /alerts/{id}:
@@ -2548,7 +3118,12 @@ paths:
           description: Detail
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AlertView' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /admin/alerts:
@@ -2568,7 +3143,14 @@ paths:
           description: Daftar
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PageEnvelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AlertView' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [alerts]
@@ -2596,7 +3178,16 @@ paths:
                 expiresAt: { type: string, format: date-time }
                 publish: { type: boolean }
       responses:
-        '201': { description: Dibuat }
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AlertView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/alerts/{id}:
@@ -2623,7 +3214,16 @@ paths:
                 instruction: { type: string }
                 level: { $ref: '#/components/schemas/AlertLevel' }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AlertView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -2641,7 +3241,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Diterbitkan }
+        '200':
+          description: Diterbitkan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AlertView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/alerts/{id}/close:
@@ -2658,7 +3267,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Ditutup }
+        '200':
+          description: Ditutup
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AlertView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /condition-reports:
@@ -2684,7 +3302,14 @@ paths:
           description: Ringkas untuk peta
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ConditionReportView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   # ==== 5.10 Notifikasi in-app ====
@@ -2708,7 +3333,14 @@ paths:
           description: Daftar
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PageEnvelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/NotificationView' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /notifications/unread-count:
@@ -2779,7 +3411,16 @@ paths:
       description: "Mulai shift"
       x-permission: shift.manage
       responses:
-        '201': { description: Mulai }
+        '201':
+          description: Mulai
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ShiftView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /shifts/end:
@@ -2799,7 +3440,16 @@ paths:
                 handoverNote: { type: string }
                 handedOverTo: { type: string, format: uuid }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ShiftView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /shifts/current:
@@ -2814,8 +3464,12 @@ paths:
           description: Shift
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
-
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ShiftView' }
   /shifts/handover:
     get:
       tags: [shifts]
@@ -2828,8 +3482,14 @@ paths:
           description: Ringkasan
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
-
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ShiftHandoverView' }
   /dashboard/summary:
     get:
       tags: [dashboard]
@@ -2902,7 +3562,7 @@ paths:
                 type: object
                 required: [data, lastId, hasMore, resetRequired]
                 properties:
-                  data: { type: array, items: { type: object } }
+                  data: { type: array, items: { $ref: '#/components/schemas/SyncEventView' } }
                   lastId: { type: string }
                   hasMore: { type: boolean }
                   resetRequired: { type: boolean }
@@ -2946,7 +3606,16 @@ paths:
                 type: { $ref: '#/components/schemas/OrganizationType' }
                 phone: { type: string }
       responses:
-        '201': { description: Dibuat }
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrganizationView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /organizations/{id}:
@@ -2972,7 +3641,16 @@ paths:
                 phone: { type: string }
                 active: { type: boolean }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrganizationView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -2998,7 +3676,16 @@ paths:
               properties:
                 regionIds: { type: array, items: { type: string } }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/OrganizationView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /organizations/{id}/units:
@@ -3042,7 +3729,16 @@ paths:
                 name: { type: string }
                 type: { type: string }
       responses:
-        '201': { description: Dibuat }
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitAdminView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /units/{id}:
@@ -3068,7 +3764,16 @@ paths:
                 type: { type: string }
                 active: { type: boolean }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UnitAdminView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -3117,7 +3822,16 @@ paths:
                 roleCodes: { type: array, items: { type: string } }
                 unitId: { type: [string, 'null'], format: uuid }
       responses:
-        '201': { description: Dibuat }
+        '201':
+          description: Dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StaffView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /staff/{userId}:
@@ -3142,7 +3856,16 @@ paths:
                 unitId: { type: [string, 'null'], format: uuid }
                 roleCodes: { type: array, items: { type: string } }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StaffView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -3160,7 +3883,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Dinonaktifkan }
+        '200':
+          description: Dinonaktifkan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StaffView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -3178,7 +3910,16 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Direset }
+        '200':
+          description: Direset
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StaffView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -3232,7 +3973,16 @@ paths:
               properties:
                 status: { $ref: '#/components/schemas/UserStatus' }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UserAdminView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -3248,7 +3998,14 @@ paths:
           description: Daftar
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/RoleView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /permissions:
@@ -3289,7 +4046,16 @@ paths:
               properties:
                 permissionCodes: { type: array, items: { type: string } }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RoleDetailView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /users/{id}/roles:
@@ -3315,7 +4081,16 @@ paths:
               properties:
                 roleCodes: { type: array, items: { type: string } }
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UserAdminView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /audit-logs:
@@ -3365,7 +4140,12 @@ paths:
           description: Pengaturan
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SystemSettingsView' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /settings/{key}:
@@ -3391,6 +4171,15 @@ paths:
               properties:
                 value: {}
       responses:
-        '200': { description: Berhasil }
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SettingEntryView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/Unprocessable' }

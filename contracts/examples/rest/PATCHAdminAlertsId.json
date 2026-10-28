@@ -1,0 +1,18 @@
+{
+  "data": {
+    "id": "99999999-9999-4999-8999-999999999901",
+    "category": "BANJIR",
+    "level": "INFO",
+    "status": "DRAFT",
+    "title": "Uji siaga banjir (revisi teks)",
+    "body": "Ini adalah draft alert uji.",
+    "instruction": "Hindari genangan dan ikuti arahan petugas.",
+    "deliveryMode": "REGION_TOPIC",
+    "regionIds": [
+      "99.99.03"
+    ],
+    "startsAt": "2026-10-05T01:00:00Z",
+    "expiresAt": "2026-10-05T07:00:00Z",
+    "createdAt": "2026-10-05T01:00:00Z"
+  }
+}

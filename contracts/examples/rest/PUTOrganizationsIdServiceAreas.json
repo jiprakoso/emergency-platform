@@ -1,0 +1,17 @@
+{
+  "data": {
+    "id": "55555555-5555-4555-8555-555555555504",
+    "name": "RSUD Kota Contoh",
+    "type": "HOSPITAL",
+    "serviceAreas": [
+      {
+        "code": "99.99.01",
+        "name": "Kec. Sinar"
+      },
+      {
+        "code": "99.99.02",
+        "name": "Kec. Bukit"
+      }
+    ]
+  }
+}

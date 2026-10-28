@@ -102,9 +102,10 @@ memungkinkan V1 memeriksa jumlah persis.
 Implementasi memakai `DB_HOST`/`DB_PORT`/`DB_USERNAME`/`DB_PASSWORD`/`DB_NAME`,
 `REDIS_HOST`/`REDIS_PORT`, `MINIO_*`, dan `NODE_ENV` — bukan `DATABASE_URL`,
 `REDIS_URL`, dan `ENV` pada handoff §5.2. `SAMPLE_MODE` diwakili oleh
-`system_settings.sample_mode` (dibaca oleh `/config/public`). Penyelarasan nama
-env dengan handoff ditunda dan perlu keputusan di titik tinjau; bukan perubahan
-kontrak.
+`system_settings.sample_mode` (dibaca oleh `/config/public`).
+**Diputuskan pemilik 2026-10-28 (D-013 di `DECISIONS.md`): pertahankan nama env
+implementasi**; handoff §5.2 dilabeli sebagai default yang diganti. Bukan
+perubahan kontrak.
 
 ## A-019: Infrastruktur uji end-to-end (e2e)
 Uji e2e (`pnpm test:e2e`, 2 berkas di `backend/test/`) memakai Postgres/Redis

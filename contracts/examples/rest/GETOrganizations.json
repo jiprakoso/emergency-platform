@@ -1,6 +1,11 @@
 {
   "data": [
     {
+      "id": "55555555-5555-4555-8555-555555555501",
+      "name": "Pusat Komando Kota Contoh",
+      "type": "COMMAND_CENTER"
+    },
+    {
       "id": "55555555-5555-4555-8555-555555555502",
       "name": "Polres Kota Contoh",
       "type": "POLICE"
@@ -23,7 +28,7 @@
     {
       "id": "55555555-5555-4555-8555-555555555506",
       "name": "Layanan Ambulans Kota Contoh",
-      "type": "AMBULANCE"
+      "type": "AMBULANCE_SERVICE"
     },
     {
       "id": "55555555-5555-4555-8555-555555555507",

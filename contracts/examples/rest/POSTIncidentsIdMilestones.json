@@ -1,0 +1,9 @@
+{
+  "data": {
+    "id": "1012",
+    "type": "incident.milestone_recorded",
+    "occurredAt": "2026-10-05T03:40:00Z",
+    "code": "SCENE_RELEASED",
+    "note": "Kendaraan boleh dipindah."
+  }
+}

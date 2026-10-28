@@ -1,0 +1,11 @@
+{
+  "data": {
+    "id": "66666666-6666-4666-8666-666666666607",
+    "fullName": "Paramedis Sari",
+    "roles": [
+      "RESPONDER"
+    ],
+    "status": "ACTIVE",
+    "mustChangePassword": true
+  }
+}

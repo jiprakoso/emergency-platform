@@ -1,0 +1,14 @@
+{
+  "data": {
+    "id": "55555555-5555-4555-8555-555555555508",
+    "name": "Dinas Perhubungan Kota Contoh",
+    "type": "DISHUB",
+    "phone": "000-0000-0060",
+    "serviceAreas": [
+      {
+        "code": "99.99.01",
+        "name": "Kec. Sinar"
+      }
+    ]
+  }
+}

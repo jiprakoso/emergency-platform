@@ -1,0 +1,31 @@
+{
+  "data": {
+    "code": "DISPATCHER",
+    "name": "Dispatcher",
+    "permissions": [
+      "report.create",
+      "incident.read_all",
+      "incident.create_manual",
+      "incident.lock",
+      "incident.update",
+      "incident.verify",
+      "incident.invalidate",
+      "incident.merge",
+      "incident.set_lead",
+      "incident.close",
+      "note.create",
+      "casualty.update",
+      "milestone.create",
+      "dispatch.create",
+      "dispatch.record_on_behalf",
+      "dispatch.cancel",
+      "resource_request.decide",
+      "pii.reveal_reporter",
+      "alert.create",
+      "alert.close",
+      "condition_report.read",
+      "shift.manage",
+      "dashboard.read"
+    ]
+  }
+}

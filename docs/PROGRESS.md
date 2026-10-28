@@ -80,7 +80,7 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - [x] `seed:verify` V1-V11 **nyata tanpa hardcode**: hitungan persis, geometri (`ST_IsValid`/`ST_Covers`/`ST_Overlaps`), lokasi di dalam kota, relasi (service area, profil staf, CC), matriks permission == katalog, login 21 staf, `/config/public` (sampleMode + tanpa nomor asli), topic FCM, rekomendasi `AMB-02`, idempotensi (base() dijalankan lagi), penjaga `ENV=prod`
 - [x] `Makefile`: `make seed`, `make verify`, `make reset-live` terhubung ke skrip; `make up` kini menunggu postgres lalu menjalankan migrasi + `seed:base` (MinIO tetap best-effort — keterbatasan registry)
 - Sisa 1c: CRUD administrasi `organizations`/`units`/`settings`/`staff` (REST §5.12) — milik jalur dashboard/administrasi (Dx6); baca role/permission sudah dibuat (lihat 1d).
-- Status: SELESAI (1c sebagian) — gerbang Fase 1 **belum** ditutup (lihat "Sisa gerbang Fase 1")
+- Status: SELESAI (1c sebagian) — gerbang Fase 1 **tertutup penuh 2026-10-28** (lihat "Status gerbang Fase 1" dan 1e)
 - Asumsi: A-014, A-015, A-016, A-017, A-018
 - Catatan: `seed:verify` lulus V1-V11 di DB dev (2026-10-26 dan 2026-10-27); seluruh pemeriksaan memakai query/layanan nyata, bukan nilai dipatok.
 - Verifikasi akhir 2026-10-27: `typecheck`/`build`/`make lint` (0 warning, 0 error)/`make contract` (114 endpoint, 63 contoh REST) hijau; `make up` → `make verify` → `make reset-live` → `make verify` sukses; smoke test HTTP hijau: `/api/v1/health` 200, `/api/v1/health/ready` 200 (`db/redis/storage: ok`), `/config/public` (sampleMode=true, nomor contoh), `/regions/resolve` dalam/kota luar kota + 401 tanpa token, alur 2FA staf penuh (setup → rahasia `enc:v1` di DB → enable kode salah 401 / benar 204 → login challenge → `login/2fa` salah 401 / benar 200).
@@ -92,13 +92,52 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - [x] Uji e2e 403: dispatcher & responder → `403 FORBIDDEN` (amplop galat + `requestId`), tanpa token → `401`, super admin → `200` berisi 7 role dan 38 kode izin (== katalog). Diverifikasi juga langsung pada server berjalan.
 - Status: SELESAI (1d) — penegakan `@RequirePermission` pada endpoint lain menyusul bersama pembuatan endpointnya (Dx6 CRUD administrasi, incidents/dispatch/alerts/shifts).
 
-## Sisa gerbang Fase 1 (BELUM)
-- [x] **Tes otomatis** (2026-10-27): Jest + ts-jest + supertest terpasang; 7 berkas `*.spec.ts` (**50 tes** unit hermetic) + 2 berkas `*.e2e-spec.ts` (**13 tes** HTTP end-to-end terhadap DB/Redis nyata); `make test` = `pnpm test` (unit) + `pnpm test:e2e` — memenuhi gerbang "tes autentikasi (OTP, rotasi refresh, deteksi pemakaian ulang, 2FA)" dan "tes permission (matriks)" (rincian di "Tes otomatis").
-- [ ] Titik tinjau **C0** belum tercatat disetujui di `DECISIONS.md`; `CC-003`..`CC-006` masih `proposed`, `Q-001`..`Q-005` belum dijawab
+### 1e - Keputusan C0 + penerapan CC-003..CC-006 (2026-10-28)
+
+**Keputusan pemilik (rekaman: `DECISIONS.md` bagian 0-1; `QUESTIONS.md` semua terjawab):**
+- **C0 disetujui**: `openapi.yaml` (114 endpoint) + `asyncapi.yaml` (42 pesan) + contoh; struktur repo & nama `make` (D-007) ditetapkan; CC-001/002/007 DIKONFIRMASI; CC-003..006 disetujui penerapannya.
+- `Q-001`..`Q-005` → **D-008** (GitHub Actions + Docker + GHCR), **D-010** (GitHub `jiprakoso/emergency-platform`), **D-011** (Linux), **D-012** (push langsung ke `main` setelah gerbang hijau).
+- **A-018 → D-013**: pertahankan nama env implementasi (`DB_*`/`REDIS_*`/`NODE_ENV`); handoff §5.2 dilabeli default yang diganti.
+
+**Diterapkan ke kontrak + dokumen + contoh (semua `approved — diterapkan`):**
+- **CC-003**: `RegionLevel` → `[CITY, DISTRICT, VILLAGE]` (== `CHECK` migrasi + ERD §3; `PROVINCE` dibuang); contoh `GETRegions.json` kini memuat baris `CITY` (Kota Contoh).
+- **CC-004**: `OrganizationType` → 9 nilai `CHECK` DB (`COMMAND_CENTER, POLICE, FIRE, HOSPITAL, BPBD, AMBULANCE_SERVICE, PRIVATE_FIRE, DISHUB, OTHER`); `AMBULANCE` → `AMBULANCE_SERVICE` di kontrak + 20 berkas contoh rest/ws; `GETOrganizations.json` kini memuat org `COMMAND_CENTER`.
+- **CC-006**: **13 komponen view baru** (`AlertView`, `NotificationView`, `IncidentEventView`, `SyncEventView`, `IncidentTypeView`, `RoleView`, `RoleDetailView`, `SystemSettingsView` (19 kunci seed §8), `ActorRef`, `ShiftView`, `ShiftHandoverView`, `ConditionReportView`, `SessionView`) + **13 respons GET ditegakkan** (`/alerts`, `/alerts/{id}`, `/admin/alerts`, `/notifications`, `/incidents/{id}/events`, `/sync/events`, `/incident-types`, `/roles`, `/settings`, `/shifts/current`, `/shifts/handover`, `/condition-reports`, `/auth/sessions`). Field diturunkan dari contoh JSON yang sudah ada + ERD (tanpa mengarang).
+- **CC-005**: **45 operasi mutasi 200/201 kini mengembalikan entitas ter-update** (view sesuai audiens: `DispatcherViewIncident` untuk aksi incident; `OfferView` pra-accept / `UnitView` pasca-accept untuk aksi dispatch; `AlertView`, `ShiftView`, `ResourceRequestView`, `OrganizationView`, `UnitAdminView`, `StaffView`, `UserAdminView`, `RoleDetailView`, `SettingEntryView`, `AttachmentView`, `CitizenReportView`, `IncidentLockView`, `CasualtyRecordView`, `IncidentEventView` untuk sisanya). **10 operasi 204 tetap tanpa isi** (ack/hapus) dan kini didokumentasikan eksplisit di dokumen REST **§1.7** beserta kewajiban refetch. Total skema komponen: 48 → **70**.
+
+**Daftar contoh berubah (untuk quicktype, D-002 — bangun ulang model yang terdampak):**
+- **45 contoh BARU** (satu per operasi mutasi): `PATCHIncidentsId`, `POSTIncidentsId{Verify,Invalidate,Merge,Resolve,Close,Lock,LockRenew,Notes,Casualties,Milestones,ResourceRequests,DispatchesOnBehalf,SelfInitiate}`, `PUTIncidentsIdLead`, `POSTDispatchesId{Seen,Reject,Status,Destination,Cancel}`, `POSTResourceRequestsId{Approve,Reject}`, `PUTUnitsId{Status,Location}`, `PATCHUnitsId`, `POST/PATCH/AdminAlerts*`, `POSTShifts{Start,End}`, `POST/PATCHOrganizations*`, `PUTOrganizationsIdServiceAreas`, `POSTOrganizationsId{Units,Staff}`, `PATCHStaffUserId`, `POSTStaffUserId{Deactivate,ResetPassword}`, `PATCHUsersIdStatus`, `PUTUsersIdRoles`, `PUTRolesIdPermissions`, `PUTSettingsKey`, `POSTAttachmentsIdConfirm`, `POSTReportsIdWithdraw`.
+- **21 contoh DIUBAH**: 8 rest (`GETIncidents`, `GETIncidentsId.dispatcherView`, `GETIncidentsIdNearby`, `GETIncidentsIdDispatchRecommendations`, `POSTIncidents`, `GETOrganizations` — AMBULANCE_SERVICE + COMMAND_CENTER; `GETRegions` — CITY; `GETIncidentsId.dispatcherView` juga AMBULANCE_SERVICE) + 13 ws (enum `AMBULANCE_SERVICE`).
+- **13 contoh GET lama kini tervalidasi ketat** terhadap skema baru (tanpa perubahan isi): `GETAlerts`, `GETAlertsId`, `GETAdminAlerts`, `GETNotifications`, `GETIncidentsIdEvents`, `GETSyncEvents`, `GETIncidentTypes`, `GETRoles`, `GETSettings`, `GETShiftsCurrent`, `GETShiftsHandover`, `GETConditionReports`, `GETAuthSessions`.
+
+**Verifikasi 2026-10-28**: `make contract` hijau (Spectral 0 error/warning kedua berkas, cakupan 114↔114 & 38+4 event, **108 contoh rest valid**), `make lint` 0/0, `typecheck`/`build` 0, `make test` 50 unit + 14 e2e, `make verify` V1-V11.
+
+**Temuan baru (usulan, `proposed`, tidak memblokir)**: `CC-008` (notifications.kind `REPORT_UPDATE` vs CHECK DB), `CC-009` (severity `MASS` vs `CRITICAL`), `CC-010` (level/category alert bebas-konfigurasi vs enum/CHECK), `CC-011` (event_type ERD UPPERCASE vs contoh dot-lowercase), `CC-012` (`AttachmentRef.kind` `IMAGE..` vs CHECK `PHOTO..`). Kontrak sementara memakai bentuk netral (`string`) untuk yang diperselisihkan.
+- Status: SELESAI (1e) — **gerbang Fase 1 tertutup penuh**; titik tinjau berikutnya **C1 (setelah Fase 2)**.
+
+## Sisa gerbang Fase 1 (semua TERTUTUP 2026-10-28)
+- [x] **Tes otomatis** (2026-10-27): Jest + ts-jest + supertest terpasang; 7 berkas `*.spec.ts` (**50 tes** unit hermetic) + 2 berkas `*.e2e-spec.ts` (**14 tes** HTTP end-to-end terhadap DB/Redis nyata); `make test` = `pnpm test` (unit) + `pnpm test:e2e` — memenuhi gerbang "tes autentikasi (OTP, rotasi refresh, deteksi pemakaian ulang, 2FA)" dan "tes permission (matriks)" (rincian di "Tes otomatis").
+- [x] Titik tinjau **C0 disetujui & tercatat di `DECISIONS.md`** (2026-10-28); `CC-003`..`CC-006` kini `approved — diterapkan`; `Q-001`..`Q-005` dijawab (D-008, D-010..D-012) — lihat 1e
 - [x] Lingkungan: image MinIO resmi tak dapat ditarik (keterbatasan registry) — **diasingkan lokal** dengan menag ulang gambar `bitnamilegacy/minio` menjadi `minio/minio:latest` + `minio/mc:latest` (isi gambar sama, memuat `minio` dan `mc`) dan `chown` volume ke uid 1001; `make up` kini menjalankan MinIO dan `/health/ready` melaporkan `200` dengan `storage: "ok"`. Compose tetap menunjuk gambar resmi; di lingkungan dengan akses registry normal tidak diperlukan langkah ini.
-- [ ] Penamaan env masih berbeda dari handoff §5.2 (A-018) — perlu keputusan titik tinjau
+- [x] Penamaan env: **diputuskan memakai nama env implementasi** (D-013, 2026-10-28); A-018 diperbarui, handoff §5.2 dilabeli default yang diganti
 - [x] **Catatan keamanan (diperbaiki 2026-10-27)**: mencabut sesi kini juga mematikan access token yang sudah terbit. `SessionService.revokeSession` menulis penyangga Redis `session:revoked:<sid>` (TTL 24 jam) yang dibaca `JwtAuthGuard`; kunci itu sebelumnya hanya ditulis `AuthService.logout`/`revokeSession`, sehingga deteksi pemakaian ulang (dan cabut sesi lewat rotasi kedaluwarsa) membiarkan access token hidup ≤15 menit. Diverifikasi ujung-ke-ujung: setelah pemakaian ulang, `GET /me` memakai token lama membalas 401 "Sesi sudah dicabut."
-- [x] `make lint` bersih: 0 warning, 0 error (2026-10-27)
+- [x] `make lint` bersih: 0 warning, 0 error (2026-10-27; diulang 2026-10-28)
+
+## Status gerbang Fase 1 & titik tinjau berikutnya (diperiksa 2026-10-28)
+
+**Cakupan gerbang Fase 1 (handoff §6.1) vs bukti:**
+
+| Syarat gerbang | Bukti | Status |
+|---|---|---|
+| V1-V11 | `make verify` diulang 2026-10-28: seluruh V1-V11 OK (infra dev sempat berhenti sendiri 41 menit — dijalankan ulang dengan `make up`, migrasi 0, seed idempoten) | LULUS |
+| Tes autentikasi (OTP, rotasi refresh, deteksi pemakaian ulang, 2FA) | `auth.e2e-spec.ts` (5 tes HTTP) + `auth.service.spec.ts`/`session.service.spec.ts`/`otp.service.spec.ts` | LULUS |
+| Tes permission (matriks) | `permission.e2e-spec.ts` (8 tes, termasuk 403/200 `@RequirePermission` via HTTP) + `permissions.catalog.spec.ts`/`permission.service.spec.ts`/`permission.guard.spec.ts` | LULUS |
+| `/config/public` benar | V7 (sampleMode=true, nomor contoh, tanpa nomor asli) + e2e | LULUS |
+| Kelengkapan umum §7.1 | `make lint` 0/0, `make contract` OK (114 endpoint, 38+4 event, **108 contoh REST**), `typecheck`/`build` 0, `make test` = **50 unit + 14 e2e** — semua diulang 2026-10-28 | LULUS |
+
+- **Gerbang Fase 1: LULUS — dan seluruh item non-teknisnya diselesaikan 2026-10-28** (rekaman C0, `Q-001`..`Q-005`, `CC-003`..`CC-006`, A-018 — lihat 1e). Tidak ada pekerjaan tersisa untuk gerbang ini.
+- **Titik tinjau formal berikutnya: C1 (setelah Fase 2)** — perilaku API laporan/incident, view per audiens (handoff §13.2).
+- Usulan baru menunggu keputusan pemilik di titik tinjau berikutnya: `CC-008`..`CC-012` (temuan kontrak-vs-DB saat penerapan; tidak memblokir Fase 2 karena kontrak memakai bentuk netral sementara).
 
 ## Tes otomatis (Jest) — 2026-10-27
 - Infrastruktur: `jest` + `ts-jest` + `@types/jest` + `supertest` (dev dependency), `backend/jest.config.js` (unit), `backend/test/jest-e2e.js` (e2e), `tsconfig.spec.json`, `make test` → `pnpm test` + `pnpm test:e2e`; `src/testing/` dan `test/` dikeluarkan dari build (`tsconfig.build.json`).
@@ -114,4 +153,4 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
   - **e2e HTTP (supertest)** — `test/auth.e2e-spec.ts`: kredensial salah → amplop galat 401, login staf + token berlaku di `/me`, rotasi refresh → pemakaian ulang `REFRESH_TOKEN_REUSED` + access token lama mati + rantai refresh mati, alur 2FA penuh (setup → enable kode salah/benar → challenge → `login/2fa`), OTP warga (permintaan 202, daftar 201, kode terpakai 401, login OTP benar/salah). `test/permission.e2e-spec.ts`: matriks `/me` per role persis == katalog (dispatcher, responder, super admin), token akses tanpa `permissions`, responder tanpa `incident.read_all`/`pii.reveal_reporter`/`settings.manage`, warga tanpa daftar permission, endpoint terproteksi 401 tanpa token vs `/config/public` terbuka (sampleMode + nomor contoh), token rusak 401. `GET /roles` & `GET /permissions`: 401 tanpa token, **403 `FORBIDDEN`** untuk dispatcher/responder (tanpa `role.manage`), 200 untuk super admin dengan isi == katalog (7 role, 38 kode izin).
   - `auth.service.spec.ts` — login staf (token tanpa `permissions` di payload), kata sandi salah, akun ditangguhkan, 2FA: setup tersimpan terenkripsi `enc:v1.`, enable kode salah/benar, challenge vs token, `login/2fa` (kode benar/salah, challenge rusak, rahasia hilang), rotasi refresh + pemakaian ulang mematikan rantai refresh dan menulis penyangga cabut sesi.
 - Keterbatasan: cakupan e2e baru dua berkas (autentikasi + permission); endpoint lain (reports/incidents/dispatch/attachments/shifts) belum punya uji e2e, dan uji 403 lewat HTTP baru mencakup `GET /roles`/`GET /permissions` karena hanya dua endpoint terpasang `@RequirePermission`.
-- Hasil: `pnpm test` 50/50 dan `pnpm test:e2e` 13/13 hijau; `make test` = keduanya; `make lint`, `typecheck`, `build` tetap hijau (2026-10-27).
+- Hasil: `pnpm test` 50/50 dan `pnpm test:e2e` 14/14 hijau; `make test` = keduanya; `make lint`, `typecheck`, `build` tetap hijau (2026-10-27, diulang 2026-10-28).

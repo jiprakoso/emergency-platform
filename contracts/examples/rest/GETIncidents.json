@@ -33,7 +33,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }
@@ -74,7 +74,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }
@@ -115,7 +115,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }
@@ -158,7 +158,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }
@@ -199,7 +199,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }
@@ -240,7 +240,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }
@@ -281,7 +281,7 @@
             "organization": {
               "id": "55555555-5555-4555-8555-555555555506",
               "name": "Layanan Ambulans Kota Contoh",
-              "type": "AMBULANCE"
+              "type": "AMBULANCE_SERVICE"
             },
             "active": 1
           }

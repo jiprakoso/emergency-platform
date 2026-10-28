@@ -81,6 +81,12 @@ Endpoint yang mencatat kejadian lapangan menerima `occurredAt` (opsional). Atura
 
 HTTPS wajib. CORS hanya untuk origin web admin/stakeholder. `helmet`, validasi DTO ketat (`whitelist` + `forbidNonWhitelisted`), batas ukuran body 1 MB. Data pelapor tidak pernah dikirim ke klien yang tidak berhak (disaring di serializer, bukan hanya disembunyikan di UI).
 
+### 1.7 Semantik respons mutasi (CC-005, diputuskan 2026-10-28)
+
+- Operasi mutasi (`POST`/`PATCH`/`PUT`) yang **mengubah satu entitas** membalas `200`/`201` **dengan entitas ter-update** di dalam `data`, sehingga klien dapat memperbarui state lokalnya tanpa refetch. Bentuknya mengikuti view yang sesuai dengan audiens (mis. `DispatcherViewIncident` untuk aksi incident, `OfferView`/`UnitView` untuk aksi dispatch, `AlertView` untuk admin alert).
+- Operasi yang murni **acknowledgement/tanpa entitas** membalas `204` tanpa isi: `POST /auth/logout`, `POST /auth/password/change`, `POST /auth/2fa/enable`, `DELETE /auth/sessions/{id}`, `DELETE /me/devices/{id}`, `DELETE /incidents/{id}/lock`, `DELETE /resource-requests/{id}`, `POST /notifications/{id}/seen`, `POST /notifications/seen-all`, `POST /notifications/{id}/delivered`. Klien **wajib menyegarkan state sendiri** setelah menerima `204`.
+- Halaman `/health` dan `/health/ready` bukan mutasi (balasan probe tanpa `data`).
+
 ---
 
 ## 2. Autentikasi dan Sesi

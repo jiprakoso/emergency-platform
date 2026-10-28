@@ -1,0 +1,12 @@
+{
+  "data": {
+    "id": "77777777-7777-4777-8777-777777777750",
+    "startedAt": "2026-10-05T03:15:00Z",
+    "startedBy": {
+      "id": "66666666-6666-4666-8666-666666666602",
+      "fullName": "Dispatcher Rina"
+    },
+    "openIncidents": 0,
+    "handoverNote": null
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "data": {
+    "id": "1011",
+    "type": "incident.note_added",
+    "occurredAt": "2026-10-05T03:40:00Z",
+    "actorName": "Dispatcher Rina",
+    "note": "Ringkasan diperbarui dari pusat komando."
+  }
+}

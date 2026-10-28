@@ -1,6 +1,15 @@
 {
   "data": [
     {
+      "code": "99.99",
+      "name": "Kota Contoh",
+      "level": "CITY",
+      "centroid": {
+        "lat": -7.275,
+        "lng": 112.725
+      }
+    },
+    {
       "code": "99.99.01",
       "name": "Kec. Sinar",
       "level": "DISTRICT",

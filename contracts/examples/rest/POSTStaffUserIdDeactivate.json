@@ -1,0 +1,11 @@
+{
+  "data": {
+    "id": "66666666-6666-4666-8666-666666666604",
+    "fullName": "Paramedis Indra",
+    "roles": [
+      "RESPONDER"
+    ],
+    "status": "DEACTIVATED",
+    "mustChangePassword": false
+  }
+}

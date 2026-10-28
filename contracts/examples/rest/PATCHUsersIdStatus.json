@@ -1,0 +1,11 @@
+{
+  "data": {
+    "id": "66666666-6666-4666-8666-666666666605",
+    "fullName": "Contoh Ditangguhkan",
+    "userType": "STAFF",
+    "roles": [
+      "RESPONDER"
+    ],
+    "status": "SUSPENDED"
+  }
+}

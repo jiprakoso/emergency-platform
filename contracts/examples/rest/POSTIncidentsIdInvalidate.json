@@ -1,0 +1,66 @@
+{
+  "data": {
+    "id": "11111111-1111-4111-8111-111111111101",
+    "code": "INC-20261005-000123",
+    "type": {
+      "code": "TRAFFIC_ACCIDENT",
+      "name": "Kecelakaan Lalu Lintas"
+    },
+    "status": "INVALID",
+    "publicStatus": "NOT_VALID",
+    "severity": "HIGH",
+    "escalationLevel": null,
+    "district": {
+      "code": "99.99.02",
+      "name": "Kec. Bukit"
+    },
+    "village": {
+      "code": "99.99.02.1001",
+      "name": "Kel. Anggrek"
+    },
+    "location": {
+      "lat": -7.275,
+      "lng": 112.73
+    },
+    "addressText": "Jl. Contoh Raya No. 12, Kel. Anggrek",
+    "description": "Kecelakaan dua kendaraan di persimpangan contoh.",
+    "summary": "Dua korban luka, satu terjepit.",
+    "leadOrganization": {
+      "id": "55555555-5555-4555-8555-555555555502",
+      "name": "Polres Kota Contoh",
+      "type": "POLICE"
+    },
+    "reporter": {
+      "name": "Budi",
+      "phoneMasked": "0812****0001"
+    },
+    "attachments": [],
+    "casualties": {
+      "injured": 2,
+      "deceased": 0,
+      "critical": 1,
+      "missing": null
+    },
+    "dispatches": [
+      {
+        "organization": {
+          "id": "55555555-5555-4555-8555-555555555506",
+          "name": "Layanan Ambulans Kota Contoh",
+          "type": "AMBULANCE_SERVICE"
+        },
+        "unit": {
+          "id": "44444444-4444-4444-8444-444444444401",
+          "name": "Ambulans 02 (Tengah)",
+          "status": "AVAILABLE"
+        },
+        "status": "EN_ROUTE",
+        "type": "RESPOND"
+      }
+    ],
+    "lockedBy": null,
+    "lockedAt": null,
+    "version": 4,
+    "createdAt": "2026-10-05T03:15:00Z",
+    "updatedAt": "2026-10-05T03:35:00Z"
+  }
+}
