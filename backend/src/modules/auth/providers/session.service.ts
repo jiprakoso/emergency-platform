@@ -1,11 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
+import { Redis } from 'ioredis';
 import { AuthSession } from '../../../database/entities/auth-session.entity';
 import { DeviceToken } from '../../../database/entities/device-token.entity';
 import { sha256Hex } from '../../../common/crypto/hash';
 import { ClockService } from '../../../common/clock/clock.service';
 import { AppError } from '../../../common/errors/app-error';
+
+/**
+ * Kunci penyangga Redis penanda sesi dicabut. `JwtAuthGuard` memeriksa kunci
+ * ini, sehingga mencabut baris sesi juga mematikan access token yang sudah
+ * terbit (bukan hanya refresh token).
+ */
+export const sessionRevokedRedisKey = (sessionId: string) => `session:revoked:${sessionId}`;
+
+const REVOKED_TTL_SECONDS = 24 * 60 * 60;
 
 export type SessionContext = {
   ipAddress?: string | null;
@@ -27,6 +38,7 @@ export class SessionService {
     @InjectRepository(AuthSession) private readonly sessions: Repository<AuthSession>,
     @InjectRepository(DeviceToken) private readonly devices: Repository<DeviceToken>,
     private readonly clock: ClockService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   async create(
@@ -111,6 +123,8 @@ export class SessionService {
       { id: sessionId, revokedAt: IsNull() },
       { revokedAt: this.clock.now() },
     );
+    // Cabut juga access token yang sudah terbit untuk sesi ini.
+    await this.redis.set(sessionRevokedRedisKey(sessionId), '1', 'EX', REVOKED_TTL_SECONDS);
   }
 
   /** Logout: cabut sesi + token FCM perangkat itu (REST §5.1). */

@@ -6,7 +6,7 @@ import { TotpService } from './providers/totp.service';
 import { TokenService } from './providers/token.service';
 import { OtpService } from './providers/otp.service';
 import { MockOtpProvider } from './providers/mock-otp.provider';
-import { SessionService } from './providers/session.service';
+import { SessionService, sessionRevokedRedisKey } from './providers/session.service';
 import { StaffLoginDto } from './dto/auth.dto';
 import { User } from '../../database/entities/user.entity';
 import { Role } from '../../database/entities/role.entity';
@@ -106,7 +106,12 @@ async function buildAuth(overrides: Partial<User> = {}): Promise<AuthFixture> {
     fakeConfig({ OTP_TTL_SECONDS: 300, OTP_RESEND_AFTER_SECONDS: 60 }),
     clock,
   );
-  const sessions = new SessionService(asRepository(authSessions), asRepository(deviceTokens), clock);
+  const sessions = new SessionService(
+    asRepository(authSessions),
+    asRepository(deviceTokens),
+    clock,
+    asRedis(redis),
+  );
 
   const permissionService = {
     getRoles: jest.fn(async () => ['DISPATCHER']),
@@ -130,7 +135,6 @@ async function buildAuth(overrides: Partial<User> = {}): Promise<AuthFixture> {
     deviceService,
     regionLookup,
     clock,
-    asRedis(redis),
   );
 
   return { auth, users, sessions: authSessions, tokens, redis, password };
@@ -286,7 +290,7 @@ describe('AuthService — rotasi refresh & pemakaian ulang', () => {
   });
 
   it('memakai ulang refresh token lama mencabut sesi (REFRESH_TOKEN_REUSED)', async () => {
-    const { auth, sessions } = await buildAuth();
+    const { auth, sessions, redis } = await buildAuth();
     const first = await auth.staffLogin(LOGIN_DTO, CTX);
     if (!isTokenPair(first)) throw new Error('diharapkan token pair');
     const second = await auth.refresh(first.refreshToken);
@@ -297,6 +301,8 @@ describe('AuthService — rotasi refresh & pemakaian ulang', () => {
     expect(err.code).toBe('REFRESH_TOKEN_REUSED');
     expect((err as AppError).getStatus()).toBe(401);
     expect(sessions.rows[0].revokedAt).not.toBeNull();
+    // Access token yang sudah terbit ikut dicabut di Redis.
+    expect(await redis.get(sessionRevokedRedisKey(sessions.rows[0].id))).toBe('1');
 
     // Rantai refresh ikut mati: token terakhir tidak bisa dipakai lagi.
     const after = await catchError(auth.refresh(second.refreshToken));

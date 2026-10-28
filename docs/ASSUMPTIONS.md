@@ -105,3 +105,17 @@ Implementasi memakai `DB_HOST`/`DB_PORT`/`DB_USERNAME`/`DB_PASSWORD`/`DB_NAME`,
 `system_settings.sample_mode` (dibaca oleh `/config/public`). Penyelarasan nama
 env dengan handoff ditunda dan perlu keputusan di titik tinjau; bukan perubahan
 kontrak.
+
+## A-019: Infrastruktur uji end-to-end (e2e)
+Uji e2e (`pnpm test:e2e`, 2 berkas di `backend/test/`) memakai Postgres/Redis
+nyata dengan keputusan berikut. (a) Basis data **terpisah**
+`emergency_platform_test` disiapkan otomatis oleh `global-setup.ts` (buat DB →
+migrasi → `seed:base`, semua idempoten) sehingga data dev tidak tersentuh dan
+`make verify` tetap stabil; tanpa infra pesan galat menyarankan `make up`.
+(b) Redis memakai milik dev, tetapi tes hanya memakai kunci miliknya (uuid/
+nomor telepon unik tiap run); penghitung laju per-IP lokal (`rl:otp:ip:*`)
+dibersihkan sebelum suite karena identitasnya tetap antar run — tanpa flush
+seluruh Redis. (c) Suite dijalankan satu per satu (`maxWorkers: 1`) agar
+penghitung laju dan sesi tidak saling mengganggu. (d) Efek samping tes
+dibersihkan: 2FA akun `dispatcher2` dinonaktifkan kembali dan warga uji
+dihapus setelah suite selesai.

@@ -70,7 +70,7 @@ class EnvironmentVariables {
 
   /** Kunci enkripsi rahasia TOTP (handoff §9.5). Wajib diisi: aplikasi gagal start bila kosong. */
   @IsString()
-  TOTP_ENCRYPTION_KEY: string = 'b55742a101a38645b87d8bdb35532803abea06d542f79c796c507275d2764997';
+  TOTP_ENCRYPTION_KEY: string = 'dev-totp-encryption-key-change-me';
 
   @IsString()
   @IsOptional()

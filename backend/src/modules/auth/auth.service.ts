@@ -8,8 +8,6 @@ import { StaffProfile } from '../../database/entities/staff-profile.entity';
 import { AuthSession } from '../../database/entities/auth-session.entity';
 import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
-import { Redis } from 'ioredis';
-import { InjectRedis } from '@nestjs-modules/ioredis';
 import { PasswordService } from './providers/password.service';
 import { TotpService } from './providers/totp.service';
 import { TokenService } from './providers/token.service';
@@ -37,8 +35,6 @@ export type TokenPair = {
 
 export type StaffLoginResult = TokenPair | { twoFactorRequired: true; challengeToken: string };
 
-const TOKEN_REVOKED_REDIS_KEY = (sessionId: string) => `session:revoked:${sessionId}`;
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -55,7 +51,6 @@ export class AuthService {
     private readonly devices: DeviceService,
     private readonly regionLookup: RegionLookupService,
     private readonly clock: ClockService,
-    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   // ---- Helper ----
@@ -302,8 +297,10 @@ export class AuthService {
     if (session) {
       const full = await this.sessions.getSessionWithHash(session.id);
       await this.sessions.logout(full ?? session);
+    } else {
+      // Sesi sudah tidak aktif; tetap matikan token yang dibawa pemohon.
+      await this.sessions.revokeSession(principal.sessionId);
     }
-    await this.redis.set(TOKEN_REVOKED_REDIS_KEY(principal.sessionId), '1', 'EX', 86400);
   }
 
   async listSessions(userId: string): Promise<AuthSession[]> {
@@ -314,7 +311,6 @@ export class AuthService {
     const session = await this.sessions.getActive(userId, sessionId);
     if (!session) throw AppError.notFound();
     await this.sessions.revokeSession(sessionId);
-    await this.redis.set(TOKEN_REVOKED_REDIS_KEY(sessionId), '1', 'EX', 86400);
   }
 
   // ---- Kata sandi & 2FA ----

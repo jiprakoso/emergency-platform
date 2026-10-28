@@ -1,10 +1,10 @@
-import { SessionService } from './session.service';
+import { SessionService, sessionRevokedRedisKey } from './session.service';
 import { AuthSession } from '../../../database/entities/auth-session.entity';
 import { DeviceToken } from '../../../database/entities/device-token.entity';
 import { ClockService } from '../../../common/clock/clock.service';
 import { sha256Hex } from '../../../common/crypto/hash';
 import { AppError } from '../../../common/errors/app-error';
-import { FakeRepository, asRepository, catchError } from '../../../testing/fakes';
+import { FakeRedis, FakeRepository, asRedis, asRepository, catchError } from '../../../testing/fakes';
 
 const USER_ID = 'user-staf-1';
 const DEVICE_ID = 'device-1';
@@ -20,12 +20,14 @@ const CTX = {
 function buildService() {
   const sessions = new FakeRepository<AuthSession>();
   const devices = new FakeRepository<DeviceToken>({ rows: [{ id: DEVICE_ID }] as DeviceToken[] });
+  const redis = new FakeRedis();
   const service = new SessionService(
     asRepository(sessions),
     asRepository(devices),
     new ClockService(),
+    asRedis(redis),
   );
-  return { service, sessions, devices };
+  return { service, sessions, devices, redis };
 }
 
 describe('SessionService', () => {
@@ -59,7 +61,7 @@ describe('SessionService', () => {
   });
 
   it('mendeteksi pemakaian ulang token lama dan mencabut seluruh sesi', async () => {
-    const { service, sessions } = buildService();
+    const { service, sessions, redis } = buildService();
     const oldToken = 'r1.lama';
     const newToken = 'r1.baru';
     await service.create(USER_ID, oldToken, 43200, CTX);
@@ -71,6 +73,8 @@ describe('SessionService', () => {
     expect(err.code).toBe('REFRESH_TOKEN_REUSED');
     expect((err as AppError).getStatus()).toBe(401);
     expect(sessions.rows[0].revokedAt).not.toBeNull();
+    // Access token yang sudah terbit ikut mati (dibaca JwtAuthGuard).
+    expect(await redis.get(sessionRevokedRedisKey(sessions.rows[0].id))).toBe('1');
 
     // Token hasil rotasi terakhir ikut mati karena sesi sudah dicabut.
     const followUp = await catchError(service.rotate(newToken, 'r1.lanjut'));
@@ -88,23 +92,25 @@ describe('SessionService', () => {
   });
 
   it('mencabut sesi yang sudah kedaluwarsa saat dipakai rotasi', async () => {
-    const { service, sessions } = buildService();
+    const { service, sessions, redis } = buildService();
     await service.create(USER_ID, 'r1.kedaluwarsa', -1, CTX);
 
     const err = await catchError(service.rotate('r1.kedaluwarsa', 'r1.baru'));
 
     expect(err.code).toBe('UNAUTHENTICATED');
     expect(sessions.rows[0].revokedAt).not.toBeNull();
+    expect(await redis.get(sessionRevokedRedisKey(sessions.rows[0].id))).toBe('1');
   });
 
-  it('logout mencabut sesi dan token perangkat terkait', async () => {
-    const { service, sessions, devices } = buildService();
+  it('logout mencabut sesi, token perangkat, dan access token', async () => {
+    const { service, sessions, devices, redis } = buildService();
     const session = await service.create(USER_ID, 'r1.logout', 43200, CTX);
 
     await service.logout(session);
 
     expect(sessions.rows[0].revokedAt).not.toBeNull();
     expect(devices.rows[0].revokedAt).not.toBeNull();
+    expect(await redis.get(sessionRevokedRedisKey(session.id))).toBe('1');
   });
 
   it('hanya sesi aktif yang terlihat', async () => {

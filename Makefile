@@ -40,8 +40,10 @@ verify:
 	cd backend && corepack pnpm seed:verify
 
 test:
-	@echo "==> menjalankan tes backend (Jest)"
+	@echo "==> menjalankan tes unit (Jest)"
 	cd backend && corepack pnpm test
+	@echo "==> menjalankan tes e2e (Jest + supertest; butuh infra: make up)"
+	cd backend && corepack pnpm test:e2e
 
 lint:
 	@echo "==> lint backend"
