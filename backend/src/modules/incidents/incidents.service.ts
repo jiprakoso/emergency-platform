@@ -422,4 +422,109 @@ export class IncidentsService {
       return { data: [] };
     }
   }
+
+  async patch(id: string, principal: AuthPrincipal | undefined, body?: any) {
+    const userId = principal?.userId;
+    if (!userId) throw AppError.unauthenticated();
+    const can = await this.permissions.hasPermission(userId, 'incident.update');
+    if (!can) throw AppError.forbidden();
+    const now = this.clock.now();
+    const result = await this.incidents.manager.transaction(async (manager) => {
+      const incRepo = manager.getRepository(Incident);
+      const evRepo = manager.getRepository(IncidentEvent);
+      const outRepo = manager.getRepository(OutboxEvent);
+      const inc = await incRepo.findOne({ where: { id } });
+      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
+      if (body?.version !== undefined && body.version !== inc.version) {
+        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
+      }
+      if (body?.severity !== undefined) inc.severity = body.severity;
+      if (body?.escalationLevel !== undefined) inc.escalationLevel = body.escalationLevel;
+      if (body?.summary !== undefined) inc.summary = body.summary;
+      if (body?.addressText !== undefined) inc.addressText = body.addressText;
+      inc.version += 1;
+      inc.updatedAt = now;
+      await incRepo.save(inc);
+      await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
+      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.updated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      return inc;
+    });
+    return result;
+  }
+
+  async getEvents(id: string) {
+    const events = await this.incidentEvents.find({ where: { incidentId: id }, order: { id: 'ASC' }, take: 100 });
+    const data = events.map((e) => ({ id: String(e.id), type: e.eventType, occurredAt: e.occurredAt?.toISOString(), actorName: e.actorUserId || undefined, channel: e.channel, code: (e as any).code, note: e.payload?.note || e.payload?.description || undefined }));
+    return { data, page: { hasMore: false, limit: 100 } };
+  }
+
+  async getReports(id: string) {
+    const reportsRepo = this.incidents.manager.getRepository((await import('../../database/entities/incident-report.entity')).IncidentReport);
+    const reports = await reportsRepo.find({ where: { incidentId: id }, order: { createdAt: 'ASC' }, take: 50 });
+    const data = reports.map((r: any) => ({
+      id: r.id,
+      reportKind: r.reportKind,
+      status: r.status,
+      location: r.location ? { lat: r.location.coordinates?.[1], lng: r.location.coordinates?.[0] } : undefined,
+      addressText: r.addressText,
+      description: r.description,
+      createdAt: r.createdAt,
+      reporter: { name: null, phoneMasked: null }, // masked
+    }));
+    return { data, page: { hasMore: false, limit: 50 } };
+  }
+
+  async addNote(id: string, principal: AuthPrincipal | undefined, body?: any) {
+    const userId = principal?.userId;
+    if (!userId) throw AppError.unauthenticated();
+    const can = await this.permissions.hasPermission(userId, 'note.create');
+    if (!can) throw AppError.forbidden();
+    const now = this.clock.now();
+    const result = await this.incidents.manager.transaction(async (manager) => {
+      const evRepo = manager.getRepository(IncidentEvent);
+      const outRepo = manager.getRepository(OutboxEvent);
+      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.note_added', actorUserId: userId, visibility: body?.visibility || 'INTERNAL', occurredAt: now, recordedAt: now, payload: { text: body?.text } }));
+      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.note_added', incidentId: id, payload: { incidentId: id }, createdAt: now }));
+      return { id: String(ev.id), type: ev.eventType, occurredAt: ev.occurredAt?.toISOString(), actorName: userId, note: body?.text };
+    });
+    return result;
+  }
+
+  async addCasualty(id: string, principal: AuthPrincipal | undefined, body?: any) {
+    const userId = principal?.userId;
+    if (!userId) throw AppError.unauthenticated();
+    const can = await this.permissions.hasPermission(userId, 'casualty.update');
+    if (!can) throw AppError.forbidden();
+    const now = this.clock.now();
+    const result = await this.incidents.manager.transaction(async (manager) => {
+      const evRepo = manager.getRepository(IncidentEvent);
+      const outRepo = manager.getRepository(OutboxEvent);
+      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.casualties_updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
+      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.casualties_updated', incidentId: id, payload: body || {}, createdAt: now }));
+      return { id: uuidv4(), injured: body?.injured || 0, deceased: body?.deceased || 0, critical: body?.critical || null, missing: body?.missing || null, note: body?.note || null, reportedAt: now.toISOString() };
+    });
+    return result;
+  }
+
+  async addMilestone(id: string, principal: AuthPrincipal | undefined, body?: any) {
+    const userId = principal?.userId;
+    if (!userId) throw AppError.unauthenticated();
+    const can = await this.permissions.hasPermission(userId, 'milestone.create');
+    if (!can) throw AppError.forbidden();
+    const now = this.clock.now();
+    const result = await this.incidents.manager.transaction(async (manager) => {
+      const evRepo = manager.getRepository(IncidentEvent);
+      const outRepo = manager.getRepository(OutboxEvent);
+      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.milestone', actorUserId: userId, visibility: 'INTERNAL', occurredAt: body?.occurredAt ? new Date(body.occurredAt) : now, recordedAt: now, payload: { code: body?.code, note: body?.note, ...body?.payload } }));
+      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.milestone', incidentId: id, payload: { code: body?.code }, createdAt: now }));
+      return { id: String(ev.id), type: ev.eventType, occurredAt: (ev.occurredAt || now).toISOString(), actorName: userId, code: body?.code, note: body?.note };
+    });
+    return result;
+  }
+
+  async getDispatchRecommendations(id: string) {
+    // Simple recommendations based on seed data - return empty or basic
+    return { data: [] };
+  }
 }

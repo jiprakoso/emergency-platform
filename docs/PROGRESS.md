@@ -154,3 +154,15 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
   - `auth.service.spec.ts` — login staf (token tanpa `permissions` di payload), kata sandi salah, akun ditangguhkan, 2FA: setup tersimpan terenkripsi `enc:v1.`, enable kode salah/benar, challenge vs token, `login/2fa` (kode benar/salah, challenge rusak, rahasia hilang), rotasi refresh + pemakaian ulang mematikan rantai refresh dan menulis penyangga cabut sesi.
 - Keterbatasan: cakupan e2e baru dua berkas (autentikasi + permission); endpoint lain (reports/incidents/dispatch/attachments/shifts) belum punya uji e2e, dan uji 403 lewat HTTP baru mencakup `GET /roles`/`GET /permissions` karena hanya dua endpoint terpasang `@RequirePermission`.
 - Hasil: `pnpm test` 50/50 dan `pnpm test:e2e` 14/14 hijau; `make test` = keduanya; `make lint`, `typecheck`, `build` tetap hijau (2026-10-27, diulang 2026-10-28).
+
+## Fase 2 - Laporan & Insiden
+### 2a - Reports, Incidents, locking & lifecycle
+- [x] Modul `attachments`, `reports`, `incidents` ditambahkan dan didaftarkan di `AppModule` (branch `fase-2-reports-incidents`).
+- [x] **Reports**: `POST /reports` (idempoten via `clientReportId`, 201/200), `GET /reports/mine`, `GET /reports/{id}`, `GET /reports/{id}/timeline` (hanya `visibility: PUBLIC`), `POST /reports/{id}/follow-ups`, `POST /reports/{id}/withdraw`.
+- [x] **Incidents**: `GET /incidents`, `GET /incidents/{id}` dengan view per-role (DispatcherView-like untuk dispatcher/supervisor, terbatas untuk responder).
+- [x] **Locking**: `POST /incidents/{id}/lock`, `DELETE /incidents/{id}/lock` (204), `POST /incidents/{id}/lock/renew`. Atomik dengan `version`, `force` + `incident.lock_override`, lock kedaluwarsa bisa diambil kembali.
+- [x] **Lifecycle**: `POST /incidents/{id}/verify`, `POST /incidents/{id}/invalidate`, `POST /incidents/{id}/merge`, `PUT /incidents/{id}/lead`, `POST /incidents/{id}/resolve`, `POST /incidents/{id}/close`. Transisi dicek status + wajib pegang kunci, ditulis ke `incident_events` + `outbox_events` dalam 1 transaksi, `version` + `VERSION_CONFLICT`.
+- [x] **Update & tracking**: `PATCH /incidents/{id}` (wajib kunci + `version`), `GET /incidents/{id}/events`, `GET /incidents/{id}/reports` (kontak pelapor dimask), `POST /incidents/{id}/notes`, `POST /incidents/{id}/casualties`, `POST /incidents/{id}/milestones`, `GET /incidents/{id}/dispatch-recommendations`.
+- [x] **Nearby**: `GET /incidents/{id}/nearby` memakai PostGIS `ST_Distance`.
+- Status: SELESAI (2a) — seluruh endpoint inti Fase 2 terimplementasi sesuai kontrak
+- Catatan: Event via outbox setelah commit, visibilitas & proteksi PII diterapkan, mesin status berbasis tabel transisi.

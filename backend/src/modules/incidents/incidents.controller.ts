@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, Post, Put, Query, Body, HttpCode } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Post, Put, Patch, Query, Body, HttpCode } from '@nestjs/common';
 import { IncidentsService } from './incidents.service';
 import { CurrentUser } from '../auth/auth.decorators';
 import { AuthPrincipal } from '../auth/auth.types';
@@ -85,5 +85,49 @@ export class IncidentsController {
   async nearby(@Param('id') id: string, @Query('radiusM') radiusM?: string, @Query('hours') hours?: string) {
     const res = await this.svc.nearby(id, radiusM ? parseInt(radiusM) : 300, hours ? parseInt(hours) : 6);
     return envelope(res);
+  }
+
+  @Patch('incidents/:id')
+  @RequirePermission('incident.update')
+  async patch(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: any) {
+    const res = await (this.svc as any).patch(id, principal, body);
+    return envelope(res);
+  }
+
+  @Get('incidents/:id/events')
+  async events(@Param('id') id: string) {
+    return (this.svc as any).getEvents(id);
+  }
+
+  @Get('incidents/:id/reports')
+  async reports(@Param('id') id: string) {
+    return (this.svc as any).getReports(id);
+  }
+
+  @Post('incidents/:id/notes')
+  @RequirePermission('note.create')
+  async notes(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: any) {
+    const res = await (this.svc as any).addNote(id, principal, body);
+    return envelope(res);
+  }
+
+  @Post('incidents/:id/casualties')
+  @RequirePermission('casualty.update')
+  async casualties(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: any) {
+    const res = await (this.svc as any).addCasualty(id, principal, body);
+    return envelope(res);
+  }
+
+  @Post('incidents/:id/milestones')
+  @RequirePermission('milestone.create')
+  async milestones(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: any) {
+    const res = await (this.svc as any).addMilestone(id, principal, body);
+    return envelope(res);
+  }
+
+  @Get('incidents/:id/dispatch-recommendations')
+  @RequirePermission('dispatch.create')
+  async dispatchRecommendations(@Param('id') id: string) {
+    return envelope(await (this.svc as any).getDispatchRecommendations(id));
   }
 }
