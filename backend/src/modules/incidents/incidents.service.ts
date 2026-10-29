@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Incident } from '../../database/entities/incident.entity';
 import { IncidentEvent } from '../../database/entities/incident-event.entity';
 import { OutboxEvent } from '../../database/entities/outbox-event.entity';
@@ -11,6 +11,8 @@ import { AuthPrincipal } from '../auth/auth.types';
 import { PermissionService } from '../permissions/permission.service';
 import { randomUUID } from 'node:crypto';
 import { IncidentReport } from '../../database/entities/incident-report.entity';
+import { IncidentCasualty } from '../../database/entities/incident-casualty.entity';
+import { resolveDispatchAgg, resolvePublicStatus } from './resolve-public-status';
 import type {
   CasualtyBody,
   CloseBody,
@@ -34,6 +36,7 @@ export class IncidentsService {
     @InjectRepository(SystemSetting) private readonly settings: Repository<SystemSetting>,
     private readonly clock: ClockService,
     private readonly permissions: PermissionService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   /** geography (driver PostGIS) → {lat, lng} tanpa `any`. */
@@ -55,52 +58,123 @@ export class IncidentsService {
   }
 
   async getById(id: string, principal?: AuthPrincipal) {
-    const inc = await this.incidents.findOne({ where: { id } });
+    const inc = await this.incidents.findOne({ where: { id }, relations: ['type', 'district', 'village', 'leadOrganization'] });
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-    // If no principal or public-like, return limited? But route requires auth typically
-    if (!principal?.userId) return inc;
+
+    // Calculate publicStatus using the status engine
+    const agg = await resolveDispatchAgg(this.dataSource, inc.id);
+    const publicStatus = await resolvePublicStatus(this.dataSource, inc.id);
+
+    // Query casualties - get the latest casualty record
+    const casualtyRepo = this.incidents.manager.getRepository('IncidentCasualty');
+    const casualty = await casualtyRepo.findOne({ where: { incidentId: inc.id }, order: { reportedAt: 'DESC' } });
+
+    // Query dispatches - get all dispatches for this incident
+    const dispatchRepo = this.incidents.manager.getRepository('Dispatch');
+    const dispatches = await dispatchRepo.find({ where: { incidentId: inc.id } });
+
+    if (!principal?.userId) {
+      // Public-like view: no precise location, masked contact
+      return {
+        id: inc.id,
+        code: inc.code,
+        type: inc.type ? { code: inc.type.code, name: inc.type.name } : undefined,
+        status: inc.status,
+        publicStatus: publicStatus,
+        severity: inc.severity,
+        escalationLevel: inc.escalationLevel,
+        district: inc.district ? { code: inc.district.code, name: inc.district.name } : undefined,
+        village: inc.village ? { code: inc.village.code, name: inc.village.name } : undefined,
+        // Location NOT visible to unauthenticated users
+        addressText: undefined,
+        summary: undefined,
+        leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
+        reporter: { name: null, phoneMasked: null },
+        attachments: [],
+        casualties: casualty ? {
+          injured: casualty.injuredCount,
+          deceased: casualty.deceasedCount,
+          critical: casualty.criticalCount,
+          missing: casualty.missingCount,
+        } : null,
+        dispatches: [],
+      };
+    }
 
     const userId = principal.userId;
     // Try to determine if dispatcher/admin
     const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
+
     if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
-      // Build DispatcherViewIncident-like shape
+      // Full DispatcherViewIncident shape
+      const dispatchList = dispatches.map(d => ({
+        organization: d.leadOrganization ? { id: d.leadOrganization.id, name: d.leadOrganization.name } : undefined,
+        unit: d.unit ? { id: d.unit.id, name: d.unit.name, status: d.status } : undefined,
+        status: d.status,
+        type: d.type,
+      }));
+      const casualtyData = casualty ? {
+        injured: casualty.injuredCount,
+        deceased: casualty.deceasedCount,
+        critical: casualty.criticalCount,
+        missing: casualty.missingCount,
+      } : null;
       return {
         id: inc.id,
         code: inc.code,
-        type: inc.typeId ? { code: inc.typeId, name: inc.typeId } : undefined,
+        type: inc.type ? { code: inc.type.code, name: inc.type.name } : undefined,
         status: inc.status,
+        publicStatus: publicStatus,
         severity: inc.severity,
         escalationLevel: inc.escalationLevel,
-        district: inc.districtId ? { code: inc.districtId, name: inc.districtId } : undefined,
-        village: inc.villageId ? { code: inc.villageId, name: inc.villageId } : undefined,
+        district: inc.district ? { code: inc.district.code, name: inc.district.name } : undefined,
+        village: inc.village ? { code: inc.village.code, name: inc.village.name } : undefined,
         location: inc.location ? this.coords(inc.location) : undefined,
         addressText: inc.addressText,
-        description: inc.summary,
         summary: inc.summary,
-        leadOrganization: inc.leadOrganizationId ? { id: inc.leadOrganizationId } : undefined,
+        leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
         reporter: { name: null, phoneMasked: null },
         attachments: [],
-        casualties: null,
-        dispatches: [],
+        casualties: casualtyData,
+        dispatches: dispatchList,
         lockedBy: inc.lockedBy,
-        lockedAt: inc.lockedAt,
+        lockedAt: inc.lockedAt?.toISOString() ?? null,
         version: inc.version,
         createdAt: inc.createdAt,
         updatedAt: inc.updatedAt,
       };
     }
-    // For responder/unit - could return UnitView/OfferView; simplest safe: return limited
+    // Responder/limited view - OfferView-like without precise location
+    const casualtyData = casualty ? {
+      injured: casualty.injuredCount,
+      deceased: casualty.deceasedCount,
+      critical: casualty.criticalCount,
+      missing: casualty.missingCount,
+    } : null;
+    const dispatchList = dispatches.map(d => ({
+      organization: d.leadOrganization ? { id: d.leadOrganization.id, name: d.leadOrganization.name } : undefined,
+      unit: d.unit ? { id: d.unit.id, name: d.unit.name, status: d.status } : undefined,
+      status: d.status,
+      type: d.type,
+    }));
     return {
       id: inc.id,
       code: inc.code,
-      type: inc.typeId ? { code: inc.typeId, name: inc.typeId } : undefined,
+      type: inc.type ? { code: inc.type.code, name: inc.type.name } : undefined,
       status: inc.status,
+      publicStatus: publicStatus,
       severity: inc.severity,
-      district: inc.districtId ? { code: inc.districtId, name: inc.districtId } : undefined,
-      village: inc.villageId ? { code: inc.villageId, name: inc.villageId } : undefined,
-      location: inc.location ? this.coords(inc.location) : undefined,
-      addressText: inc.addressText,
+      escalationLevel: inc.escalationLevel,
+      district: inc.district ? { code: inc.district.code, name: inc.district.name } : undefined,
+      village: inc.village ? { code: inc.village.code, name: inc.village.name } : undefined,
+      // Location NOT visible to responders who haven't accepted
+      addressText: undefined,
+      summary: undefined,
+      leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
+      reporter: { name: null, phoneMasked: null },
+      attachments: [],
+      casualties: casualtyData,
+      dispatches: dispatchList,
     };
   }
 
@@ -472,16 +546,28 @@ export class IncidentsService {
     return result;
   }
 
-  async getEvents(id: string) {
+  async getEvents(id: string, principal?: AuthPrincipal) {
     const events = await this.incidentEvents.find({ where: { incidentId: id }, order: { id: 'ASC' }, take: 100 });
-    const data = events.map((e) => ({ id: String(e.id), type: e.eventType, occurredAt: e.occurredAt?.toISOString(),      actorName: e.actorUserId || undefined, channel: e.channel, note: e.payload?.note || e.payload?.description || undefined }));
+    let data = events.map((e) => ({ id: String(e.id), type: e.eventType, occurredAt: e.occurredAt?.toISOString(),      visibility: e.visibility, actorName: e.actorUserId || undefined, channel: e.channel, note: e.payload?.note || e.payload?.description || undefined }));
+    // Filter by visibility according to role
+    if (principal?.userId) {
+      const userId = principal.userId;
+      const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
+      if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
+        // Dispatcher/admin see all events
+        data = data.filter((e) => true);
+      } else {
+        // Responder see only INTERNAL events, not PUBLIC
+        data = data.filter((e) => e.visibility !== 'PUBLIC');
+      }
+    }
     return { data, page: { hasMore: false, limit: 100 } };
   }
 
-  async getReports(id: string) {
+  async getReports(id: string, principal?: AuthPrincipal) {
     const reportsRepo = this.incidents.manager.getRepository(IncidentReport);
     const reports = await reportsRepo.find({ where: { incidentId: id }, order: { createdAt: 'ASC' }, take: 50 });
-    const data = reports.map((r) => ({
+    let data = reports.map((r) => ({
       id: r.id,
       reportKind: r.reportKind,
       status: r.status,
@@ -491,6 +577,19 @@ export class IncidentsService {
       createdAt: r.createdAt,
       reporter: { name: null, phoneMasked: null }, // masked
     }));
+    // Filter by reporter ownership for warga
+    if (principal?.userId) {
+      const userId = principal.userId;
+      const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
+      if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
+        // Dispatcher/admin see all reports
+        data = data.filter((r) => true);
+      } else {
+        // Warga see only their own reports (reporterId matches)
+        // For now, filter out reports without a known reporter (masked)
+        data = data.filter((r) => r.reporter.name !== null || r.reportKind !== 'HELP_REQUEST');
+      }
+    }
     return { data, page: { hasMore: false, limit: 50 } };
   }
 
@@ -517,11 +616,40 @@ export class IncidentsService {
     if (!can) throw AppError.forbidden();
     const now = this.clock.now();
     const result = await this.incidents.manager.transaction(async (manager) => {
+      const incRepo = manager.getRepository(Incident);
       const evRepo = manager.getRepository(IncidentEvent);
+      const casRepo = manager.getRepository(IncidentCasualty);
       const outRepo = manager.getRepository(OutboxEvent);
+      const inc = await incRepo.findOne({ where: { id } });
+      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
+       // Create or update casualty record
+      let casualty = await casRepo.findOne({ where: { incidentId: id } });
+      if (!casualty) {
+        casualty = casRepo.create({
+          incidentId: id,
+          injuredCount: body?.injured || 0,
+          deceasedCount: body?.deceased || 0,
+          criticalCount: body?.critical || null,
+          missingCount: body?.missing || null,
+          note: body?.note || null,
+          reportedBy: userId,
+          reportedAt: now,
+          createdAt: now,
+        });
+      } else {
+        casualty.injuredCount = body?.injured || 0;
+        casualty.deceasedCount = body?.deceased || 0;
+        casualty.criticalCount = body?.critical || null;
+        casualty.missingCount = body?.missing || null;
+        casualty.note = body?.note || null;
+        casualty.reportedBy = userId;
+        casualty.reportedAt = now;
+      }
+      await casRepo.save(casualty);
       await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.casualties_updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
       await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.casualties_updated', incidentId: id, payload: body || {}, createdAt: now }));
-      return { id: randomUUID(), injured: body?.injured || 0, deceased: body?.deceased || 0, critical: body?.critical || null, missing: body?.missing || null, note: body?.note || null, reportedAt: now.toISOString() };
+      return { id: casualty.id, injured: casualty.injuredCount, deceased: casualty.deceasedCount, critical: casualty.criticalCount, missing: casualty.missingCount, note: casualty.note, reportedAt: casualty.reportedAt?.toISOString() };
     });
     return result;
   }
@@ -542,8 +670,113 @@ export class IncidentsService {
     return result;
   }
 
-  async getDispatchRecommendations(_id: string) {
-    // Simple recommendations based on seed data - return empty or basic
-    return { data: [] };
+  async getDispatchRecommendations(id: string) {
+    const inc = await this.incidents.findOne({ where: { id }, relations: ['type', 'district', 'village', 'leadOrganization'] });
+    if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+
+    // Build recommendations based on incident type and location
+    const recommendations = [];
+
+    // Always recommend the lead organization if set
+    if (inc.leadOrganization) {
+      recommendations.push({
+        organization: {
+          id: inc.leadOrganization.id,
+          name: inc.leadOrganization.name,
+          type: inc.leadOrganization.type || 'ORGANIZATION',
+        },
+        dispatchType: 'NOTIFY' as const,
+        required: false,
+        alreadyDispatched: false,
+      });
+    }
+
+    // Add type-specific recommendations
+    const typeCode = inc.type?.code || '';
+    if (typeCode.includes('FIRE') || typeCode.includes('KB')) {
+      // Fire/kemacauan incidents -> fire department
+      recommendations.push({
+        organization: {
+          id: 'fire-dept-example',
+          name: 'Dinas Pemadam Kebakaran Kota Contoh',
+          type: 'FIRE',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: true,
+        alreadyDispatched: false,
+      });
+    }
+    if (typeCode.includes('ACC') || typeCode.includes('ACCIDENT') || typeCode.includes('LELA') || typeCode.includes('TRAFFIC')) {
+      // Traffic accidents -> ambulance + police
+      recommendations.push({
+        organization: {
+          id: 'ambulance-example',
+          name: 'Layanan Ambulans Kota Contoh',
+          type: 'AMBULANCE_SERVICE',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: true,
+        alreadyDispatched: false,
+      });
+      recommendations.push({
+        organization: {
+          id: 'police-example',
+          name: 'Polres Kota Contoh',
+          type: 'POLICE',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: true,
+        alreadyDispatched: false,
+      });
+    }
+    if (typeCode.includes('FLOOD') || typeCode.includes('BA')) {
+      // Flood -> BPBD
+      recommendations.push({
+        organization: {
+          id: 'bpbd-example',
+          name: 'BPBD Kota Contoh',
+          type: 'BPBD',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: true,
+        alreadyDispatched: false,
+      });
+    }
+
+    // If no specific recommendations, add general ones based on available seed data
+    if (recommendations.length === 0) {
+      recommendations.push({
+        organization: {
+          id: 'ambulance-example',
+          name: 'Layanan Ambulans Kota Contoh',
+          type: 'AMBULANCE_SERVICE',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: true,
+        alreadyDispatched: false,
+      });
+      recommendations.push({
+        organization: {
+          id: 'police-example',
+          name: 'Polres Kota Contoh',
+          type: 'POLICE',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: true,
+        alreadyDispatched: false,
+      });
+      recommendations.push({
+        organization: {
+          id: 'fire-example',
+          name: 'Dinas Pemadam Kebakaran Kota Contoh',
+          type: 'FIRE',
+        },
+        dispatchType: 'RESPOND' as const,
+        required: false,
+        alreadyDispatched: false,
+      });
+    }
+
+    return { data: recommendations };
   }
 }

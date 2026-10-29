@@ -101,13 +101,15 @@ export class IncidentsController {
   }
 
   @Get('incidents/:id/events')
-  async events(@Param('id') id: string) {
-    return this.svc.getEvents(id);
+  @RequirePermission('incident.read_all')
+  async events(@Param('id') id: string, @CurrentUser() principal?: AuthPrincipal) {
+    return this.svc.getEvents(id, principal);
   }
 
   @Get('incidents/:id/reports')
-  async reports(@Param('id') id: string) {
-    return this.svc.getReports(id);
+  @RequirePermission('incident.read_all')
+  async reports(@Param('id') id: string, @CurrentUser() principal?: AuthPrincipal) {
+    return this.svc.getReports(id, principal);
   }
 
   @Post('incidents/:id/notes')

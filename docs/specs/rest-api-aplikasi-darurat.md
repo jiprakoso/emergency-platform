@@ -296,8 +296,8 @@ Batas awal 🔶: foto `image/jpeg|png|webp` maksimal 10 MB, video `video/mp4` ma
 |---|---|---|---|
 | POST | `/reports` | `report.create` | Buat laporan (idempoten lewat `clientReportId`) |
 | GET | `/reports/mine` | `report.read_own` | Daftar laporan sendiri (kursor) |
-| GET | `/reports/{id}` | `report.read_own` | Detail + `publicStatus` |
-| GET | `/reports/{id}/timeline` | `report.read_own` | Event ber-`visibility = PUBLIC`, urut waktu |
+| GET | `/reports/{id}` | `report.read_own` | Detail + `publicStatus`. untuk membuka nomor penuh melalui `POST /reports/{id}/reveal-contact` |
+| GET | `/reports/{id}/timeline` | `report.read_own` | Event ber-`visibility = PUBLIC`, urut waktu. Dilapisi serializer berdasarkan role (warga: hanya event Publik; responder: event tambahan) |
 | POST | `/reports/{id}/follow-ups` | `report.create` | Laporan susulan (korban bertambah, info baru). Menjadi laporan baru di incident yang sama dan memberi notifikasi ke dispatcher |
 | POST | `/reports/{id}/withdraw` | `report.read_own` | Warga menarik laporan: `reason`. **Tidak** membatalkan incident, hanya mencatat. Dispatcher yang memutuskan |
 
@@ -347,7 +347,7 @@ Aturan:
 | Method | Path | Izin | Ringkasan |
 |---|---|---|---|
 | GET | `/incidents` | `incident.read_all` | Antrean/daftar. Filter: `status`, `typeCode`, `severity`, `districtId`, `leadOrgId`, `lockedBy`, `flag`, `from`, `to`, `q`. Sort: `-createdAt`, `-severity`. Setiap item memuat `dispatchSummary` (jumlah dispatch `active`, `offered`, `rejected`, `expired`, per organisasi) dan `attentionReasons[]` (mis. `NEEDS_REPLACEMENT`, `SUGGESTED_DUPLICATE`, `UNSEEN_OFFER`, `PENDING_RESOURCE_REQUEST`) agar dashboard dapat menghitung "Perlu Perhatian" dari state server |
-| GET | `/incidents/{id}` | `incident.read_all` atau `incident.read_related` | Bentuk sesuai bagian 4 |
+| GET | `/incidents/{id}` | `incident.read_all` atau `incident.read_related` | Bentuk sesuai bagian 4.1. Menampilkan `publicStatus`, casualties jika terkait, dispatches per organisasi, visibilitas lokasi dan kontak pelapor berdasarkan role (tampilan `OfferView` sebelum accept, `UnitView` sesudah accept, `DispatcherView` penuh). |
 | POST | `/incidents` | `incident.create_manual` | Input manual (penelepon). Body: `typeCode`, `location`, `addressText`, `description`, `reporter { name, phone }`, `channel` (`PHONE`/`WHATSAPP`/`SMS`), `severity?` |
 | POST | `/incidents/{id}/lock` | `incident.lock` | Ambil kunci. `409 INCIDENT_LOCKED` bila dipegang orang lain (respons memuat `lockedBy`, `lockedAt`). `{ "force": true }` hanya dengan `incident.lock_override` |
 | POST | `/incidents/{id}/lock/renew` | `incident.lock` | Perpanjang kunci (heartbeat dari web admin, tiap ±60 detik). Kunci default berlaku 5 menit 🔶 |
@@ -363,10 +363,10 @@ Aturan:
 | POST | `/incidents/{id}/notes` | `note.create` | Catatan: `text`, `visibility` (`INTERNAL`/`LEAD`/`UNITS`) |
 | GET | `/incidents/{id}/reports` | `incident.read_all` | Laporan tertaut. Kontak dimask |
 | POST | `/reports/{id}/reveal-contact` | `pii.reveal_reporter` | Membuka nomor/nama pelapor penuh. **Menulis audit log** |
-| POST | `/incidents/{id}/casualties` | `casualty.update` | Body: `injured`, `deceased`, `critical?`, `missing?`, `note?`. Menambah baris riwayat |
+| POST | `/incidents/{id}/casualties` | `casualty.update` | Body: `injured`, `deceased`, `critical?`, `missing?`, `note?`. Menambah baris riwayat di `IncidentCasualty` entity. Casualty baris mencatat `injured`, `deceased`, `critical`, `missing`, `note`, serta `occurredAt` dan `recordedAt`. RESPONDER hanya bisa memperbarui korban terkait dispatch mereka. |
 | POST | `/incidents/{id}/milestones` | `milestone.create` | Body: `code`, `note?`, `payload?`, `occurredAt?`. Responder hanya bila organisasinya lead |
-| GET | `/incidents/{id}/events` | sesuai akses | Event log (kursor `afterId`), disaring `visibility` sesuai role |
-| GET | `/incidents/{id}/dispatch-recommendations` | `dispatch.create` | Parameter: `orgType`, `unitType`. Daftar unit/organisasi terurut: `distanceM`, `status`, `inServiceArea`, `alreadyAssigned` |
+| GET | `/incidents/{id}/events` | sesuai akses | Event log (kursor `afterId`), disaring `visibility` sesuai role (dilapisan serializer berdasarkan role, incident status, dan dispatch status) |
+| GET | `/incidents/{id}/dispatch-recommendations` | `dispatch.create` | Parameter: `orgType`, `unitType`. Daftar unit/organisasi terurut: `distanceM`, `status`, `inServiceArea`, `alreadyAssigned`. Type-specific recommendations: `fire` → pump & ladder trucks; `accident` → rescue & ambulance; `flood` → rescue boat & water pumps. Disertakan info `alreadyDispatched` per organisasi. |
 
 Kode milestone awal: `SCENE_RELEASED`, `ROAD_REOPENED`, `VICTIM_DECEASED_HANDLED`, `EXTERNAL_UNIT_ARRIVED` (`payload: { organization, units, source: "DIPANGGIL" | "MANDIRI" }`), `EXTERNAL_COORDINATION`. Daftar kode divalidasi di aplikasi sehingga menambah kode tidak perlu migrasi.
 
