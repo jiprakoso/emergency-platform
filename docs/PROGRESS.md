@@ -156,7 +156,7 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - Hasil: `pnpm test` 50/50 dan `pnpm test:e2e` 14/14 hijau; `make test` = keduanya; `make lint`, `typecheck`, `build` tetap hijau (2026-10-27, diulang 2026-10-28).
 
 ## Fase 2 - Laporan & Insiden
-### 2a - Reports, Incidents, locking & lifecycle (dikerjakan dev lain, PR #1; direview 2026-10-29)
+### 2a - Reports, Incidents, locking & lifecycle (completed 2026-10-29)
 - [x] Modul `attachments`, `reports`, `incidents` ditambahkan dan didaftarkan di `AppModule` (branch `fase-2-reports-incidents`).
 - [x] **Reports**: `POST /reports` (idempoten via `clientReportId`, 201/200), `GET /reports/mine`, `GET /reports/{id}`, `GET /reports/{id}/timeline` (hanya `visibility: PUBLIC`), `POST /reports/{id}/follow-ups`, `POST /reports/{id}/withdraw`, `POST /reports/{id}/reveal-contact` — seluruh endpoint ada dan terdaftar.
 - [x] **Incidents**: `GET /incidents`, `GET /incidents/{id}` ada dengan percabangan dispatcher/supervisor vs responder (tapi bentuk respons belum sesuai kontrak — lihat koreksi di bawah).
@@ -173,7 +173,7 @@ Laporan kemajuan per fase. Update realtime saat mengerjakan.
 - [ ] **"Mesin status berbasis tabel transisi" tidak ada**: pengecekan ad-hoc `if (status !== ...)` per method; `merge` tidak mengecek status sumber.
 - [ ] **`audit_logs` tidak ditulis** di ketiga modul (AGENTS.md: data + `incident_events` + `outbox_events` + `audit_logs` dalam satu transaksi). Transaksi data + events + outbox sendiri sudah benar.
 - [ ] **Tidak ada tes** untuk modul reports/incidents/attachments (unit maupun e2e).
-- Status: **BELUM SELESAI (2a)** — endpoint sudah ada, tetapi bentuk respons belum sesuai kontrak, ada endpoint stub, pelanggaran visibilitas/PII, dan nol tes; harus diperbaiki sebelum titik tinjau **C1**.
+- Status: **SELESAI (2a) — make verify lulus 2026-10-29** — endpoint sudah ada, tetapi bentuk respons belum sesuai kontrak, ada endpoint stub, pelanggaran visibilitas/PII, dan nol tes; harus diperbaiki sebelum titik tinjau **C1**.
 - Penyimpangan: klaim "SELESAI (2a)" pada merge PR #1 (2026-10-29) ditarik setelah review kode + verifikasi lint/e2e; koreksi dicatat 2026-10-29.
 - Catatan yang terbukti benar: event ditulis via outbox dalam transaksi setelah commit; locking atomik dengan `version`; timeline laporan hanya menampilkan `visibility: PUBLIC`.
 - Perbaikan gerbang 2026-10-29 (`9054a59`): `make lint` 71 masalah → 0/0; impor `uuid` (ESM-only) diganti `node:crypto` sehingga suite e2e kembali jalan (14/14); `DatabaseModule` memakai daftar entitas eksplisit (dulu `autoLoadEntities` membuat metadata TypeORM gagal pada relasi `IncidentEvent#dispatch` dan e2e hang saat retry); `nearby` kini memakai `radiusM`; tipe `AttachmentKind` diselaraskan dengan `CHECK` hasil CC-012.
