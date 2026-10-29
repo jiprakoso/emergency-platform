@@ -9,7 +9,21 @@ import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
 import { PermissionService } from '../permissions/permission.service';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
+import { IncidentReport } from '../../database/entities/incident-report.entity';
+import type {
+  CasualtyBody,
+  CloseBody,
+  InvalidateBody,
+  LeadBody,
+  LockBody,
+  MergeBody,
+  MilestoneBody,
+  NoteBody,
+  PatchBody,
+  ResolveBody,
+  VerifyBody,
+} from './dto/incidents.dto';
 
 @Injectable()
 export class IncidentsService {
@@ -21,6 +35,12 @@ export class IncidentsService {
     private readonly clock: ClockService,
     private readonly permissions: PermissionService,
   ) {}
+
+  /** geography (driver PostGIS) → {lat, lng} tanpa `any`. */
+  private coords(raw: string): { lat: number | undefined; lng: number | undefined } {
+    const point = raw as unknown as { coordinates?: [number, number] };
+    return { lat: point.coordinates?.[1], lng: point.coordinates?.[0] };
+  }
 
   async list() {
     const list = await this.incidents.find({ order: { createdAt: 'DESC' }, take: 25 });
@@ -50,14 +70,13 @@ export class IncidentsService {
         code: inc.code,
         type: inc.typeId ? { code: inc.typeId, name: inc.typeId } : undefined,
         status: inc.status,
-        publicStatus: (inc as any).publicStatus,
         severity: inc.severity,
         escalationLevel: inc.escalationLevel,
         district: inc.districtId ? { code: inc.districtId, name: inc.districtId } : undefined,
         village: inc.villageId ? { code: inc.villageId, name: inc.villageId } : undefined,
-        location: inc.location ? { lat: (inc.location as any).coordinates?.[1], lng: (inc.location as any).coordinates?.[0] } : undefined,
+        location: inc.location ? this.coords(inc.location) : undefined,
         addressText: inc.addressText,
-        description: inc.summary || (inc as any).description,
+        description: inc.summary,
         summary: inc.summary,
         leadOrganization: inc.leadOrganizationId ? { id: inc.leadOrganizationId } : undefined,
         reporter: { name: null, phoneMasked: null },
@@ -77,24 +96,23 @@ export class IncidentsService {
       code: inc.code,
       type: inc.typeId ? { code: inc.typeId, name: inc.typeId } : undefined,
       status: inc.status,
-      publicStatus: (inc as any).publicStatus,
       severity: inc.severity,
       district: inc.districtId ? { code: inc.districtId, name: inc.districtId } : undefined,
       village: inc.villageId ? { code: inc.villageId, name: inc.villageId } : undefined,
-      location: inc.location ? { lat: (inc.location as any).coordinates?.[1], lng: (inc.location as any).coordinates?.[0] } : undefined,
+      location: inc.location ? this.coords(inc.location) : undefined,
       addressText: inc.addressText,
     };
   }
 
   private async getLockSeconds(): Promise<number> {
     const row = await this.settings.findOne({ where: { key: 'incident_lock_seconds' } });
-    const val = row?.value as any;
+    const val = row?.value;
     if (typeof val === 'number') return val;
-    if (val && typeof val.value === 'number') return val.value;
+    if (val && typeof val === 'object' && 'value' in val && typeof val.value === 'number') return val.value;
     return 300;
   }
 
-  async lock(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async lock(id: string, principal: AuthPrincipal | undefined, body?: LockBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const canLock = await this.permissions.hasPermission(userId, 'incident.lock');
@@ -120,7 +138,7 @@ export class IncidentsService {
     const res = await this.incidents
       .createQueryBuilder()
       .update(Incident)
-      .set({ lockedBy: userId, lockedAt: now, lockExpiresAt: expiresAt, version: inc.version + 1, updatedAt: now } as any)
+      .set({ lockedBy: userId, lockedAt: now, lockExpiresAt: expiresAt, version: inc.version + 1, updatedAt: now })
       .where('id = :id', { id })
       .andWhere(
         '(locked_by IS NULL OR lock_expires_at < :now OR locked_by = :userId)',
@@ -150,9 +168,9 @@ export class IncidentsService {
       const canOverride = await this.permissions.hasPermission(userId, 'incident.lock_override');
       if (!canOverride) throw AppError.forbidden();
     }
-    inc.lockedBy = null as any;
-    inc.lockedAt = null as any;
-    inc.lockExpiresAt = null as any;
+    inc.lockedBy = null;
+    inc.lockedAt = null;
+    inc.lockExpiresAt = null;
     inc.version += 1;
     inc.updatedAt = this.clock.now();
     await this.incidents.save(inc);
@@ -182,7 +200,7 @@ export class IncidentsService {
     };
   }
 
-  async verify(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async verify(id: string, principal: AuthPrincipal | undefined, body?: VerifyBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const canVerify = await this.permissions.hasPermission(userId, 'incident.verify');
@@ -225,7 +243,7 @@ export class IncidentsService {
       );
       await outRepo.save(
         outRepo.create({
-          eid: uuidv4(),
+          eid: randomUUID(),
           eventType: 'incident.verified',
           incidentId: inc.id,
           payload: { incidentId: inc.id },
@@ -237,7 +255,7 @@ export class IncidentsService {
     return result;
   }
 
-  async invalidate(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async invalidate(id: string, principal: AuthPrincipal | undefined, body?: InvalidateBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.invalidate');
@@ -276,7 +294,7 @@ export class IncidentsService {
       );
       await outRepo.save(
         outRepo.create({
-          eid: uuidv4(),
+          eid: randomUUID(),
           eventType: 'incident.invalidated',
           incidentId: inc.id,
           payload: { incidentId: inc.id },
@@ -288,7 +306,7 @@ export class IncidentsService {
     return result;
   }
 
-  async merge(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async merge(id: string, principal: AuthPrincipal | undefined, body?: MergeBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.merge');
@@ -310,13 +328,13 @@ export class IncidentsService {
       inc.updatedAt = now;
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.duplicated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { targetIncidentId: body?.targetIncidentId, reason: body?.reason } }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.duplicated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.duplicated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
       return inc;
     });
     return result;
   }
 
-  async setLead(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async setLead(id: string, principal: AuthPrincipal | undefined, body?: LeadBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.set_lead');
@@ -335,13 +353,13 @@ export class IncidentsService {
       inc.updatedAt = now;
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.lead_set', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { organizationId: body.organizationId, reason: body?.reason } }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.lead_set', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.lead_set', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
       return inc;
     });
     return result;
   }
 
-  async resolve(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async resolve(id: string, principal: AuthPrincipal | undefined, body?: ResolveBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.close');
@@ -363,13 +381,13 @@ export class IncidentsService {
       inc.updatedAt = now;
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.resolved', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { note: body?.note } }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.resolved', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.resolved', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
       return inc;
     });
     return result;
   }
 
-  async close(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async close(id: string, principal: AuthPrincipal | undefined, body?: CloseBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.close');
@@ -391,7 +409,7 @@ export class IncidentsService {
       inc.updatedAt = now;
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.closed', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { note: body?.note } }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.closed', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.closed', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
       return inc;
     });
     return result;
@@ -407,11 +425,12 @@ export class IncidentsService {
          WHERE id <> $1
            AND location IS NOT NULL
            AND created_at >= (now() - interval '1 hour' * $2)
+           AND ST_Distance(location::geography, (SELECT location FROM incidents WHERE id = $1)::geography) <= $3
          ORDER BY dist_m ASC
          LIMIT 50`,
-        [id, hours],
+        [id, hours, radiusM],
       );
-      const data = rows.map((r: any) => ({
+      const data = rows.map((r: { id: string; code: string; dist_m: string | number; created_at: Date }) => ({
         id: r.id,
         code: r.code,
         distanceM: Math.round(Number(r.dist_m)),
@@ -423,7 +442,7 @@ export class IncidentsService {
     }
   }
 
-  async patch(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async patch(id: string, principal: AuthPrincipal | undefined, body?: PatchBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.update');
@@ -447,7 +466,7 @@ export class IncidentsService {
       inc.updatedAt = now;
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.updated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.updated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
       return inc;
     });
     return result;
@@ -455,18 +474,18 @@ export class IncidentsService {
 
   async getEvents(id: string) {
     const events = await this.incidentEvents.find({ where: { incidentId: id }, order: { id: 'ASC' }, take: 100 });
-    const data = events.map((e) => ({ id: String(e.id), type: e.eventType, occurredAt: e.occurredAt?.toISOString(), actorName: e.actorUserId || undefined, channel: e.channel, code: (e as any).code, note: e.payload?.note || e.payload?.description || undefined }));
+    const data = events.map((e) => ({ id: String(e.id), type: e.eventType, occurredAt: e.occurredAt?.toISOString(),      actorName: e.actorUserId || undefined, channel: e.channel, note: e.payload?.note || e.payload?.description || undefined }));
     return { data, page: { hasMore: false, limit: 100 } };
   }
 
   async getReports(id: string) {
-    const reportsRepo = this.incidents.manager.getRepository((await import('../../database/entities/incident-report.entity')).IncidentReport);
+    const reportsRepo = this.incidents.manager.getRepository(IncidentReport);
     const reports = await reportsRepo.find({ where: { incidentId: id }, order: { createdAt: 'ASC' }, take: 50 });
-    const data = reports.map((r: any) => ({
+    const data = reports.map((r) => ({
       id: r.id,
       reportKind: r.reportKind,
       status: r.status,
-      location: r.location ? { lat: r.location.coordinates?.[1], lng: r.location.coordinates?.[0] } : undefined,
+      location: r.location ? this.coords(r.location) : undefined,
       addressText: r.addressText,
       description: r.description,
       createdAt: r.createdAt,
@@ -475,7 +494,7 @@ export class IncidentsService {
     return { data, page: { hasMore: false, limit: 50 } };
   }
 
-  async addNote(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async addNote(id: string, principal: AuthPrincipal | undefined, body?: NoteBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'note.create');
@@ -485,13 +504,13 @@ export class IncidentsService {
       const evRepo = manager.getRepository(IncidentEvent);
       const outRepo = manager.getRepository(OutboxEvent);
       const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.note_added', actorUserId: userId, visibility: body?.visibility || 'INTERNAL', occurredAt: now, recordedAt: now, payload: { text: body?.text } }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.note_added', incidentId: id, payload: { incidentId: id }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.note_added', incidentId: id, payload: { incidentId: id }, createdAt: now }));
       return { id: String(ev.id), type: ev.eventType, occurredAt: ev.occurredAt?.toISOString(), actorName: userId, note: body?.text };
     });
     return result;
   }
 
-  async addCasualty(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async addCasualty(id: string, principal: AuthPrincipal | undefined, body?: CasualtyBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'casualty.update');
@@ -500,14 +519,14 @@ export class IncidentsService {
     const result = await this.incidents.manager.transaction(async (manager) => {
       const evRepo = manager.getRepository(IncidentEvent);
       const outRepo = manager.getRepository(OutboxEvent);
-      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.casualties_updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.casualties_updated', incidentId: id, payload: body || {}, createdAt: now }));
-      return { id: uuidv4(), injured: body?.injured || 0, deceased: body?.deceased || 0, critical: body?.critical || null, missing: body?.missing || null, note: body?.note || null, reportedAt: now.toISOString() };
+      await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.casualties_updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.casualties_updated', incidentId: id, payload: body || {}, createdAt: now }));
+      return { id: randomUUID(), injured: body?.injured || 0, deceased: body?.deceased || 0, critical: body?.critical || null, missing: body?.missing || null, note: body?.note || null, reportedAt: now.toISOString() };
     });
     return result;
   }
 
-  async addMilestone(id: string, principal: AuthPrincipal | undefined, body?: any) {
+  async addMilestone(id: string, principal: AuthPrincipal | undefined, body?: MilestoneBody) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'milestone.create');
@@ -517,13 +536,13 @@ export class IncidentsService {
       const evRepo = manager.getRepository(IncidentEvent);
       const outRepo = manager.getRepository(OutboxEvent);
       const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.milestone', actorUserId: userId, visibility: 'INTERNAL', occurredAt: body?.occurredAt ? new Date(body.occurredAt) : now, recordedAt: now, payload: { code: body?.code, note: body?.note, ...body?.payload } }));
-      await outRepo.save(outRepo.create({ eid: uuidv4(), eventType: 'incident.milestone', incidentId: id, payload: { code: body?.code }, createdAt: now }));
+      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.milestone', incidentId: id, payload: { code: body?.code }, createdAt: now }));
       return { id: String(ev.id), type: ev.eventType, occurredAt: (ev.occurredAt || now).toISOString(), actorName: userId, code: body?.code, note: body?.note };
     });
     return result;
   }
 
-  async getDispatchRecommendations(id: string) {
+  async getDispatchRecommendations(_id: string) {
     // Simple recommendations based on seed data - return empty or basic
     return { data: [] };
   }

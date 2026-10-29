@@ -11,7 +11,8 @@ import { User } from '../../database/entities/user.entity';
 import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
+import { CreateReportDto, FollowUpDto, WithdrawDto } from './dto/reports.dto';
 
 function makeIncidentCode(now: Date): string {
   const y = now.getUTCFullYear();
@@ -35,14 +36,7 @@ export class ReportsService {
     private readonly clock: ClockService,
   ) {}
 
-  private parsePoint(p: any): string {
-    // PostGIS geography(Point,4326) - use ST_GeomFromText? easier via ST_SetSRID(ST_MakePoint(lng,lat),4326)
-    // but we pass as string for TypeORM geography? better to use raw; but entity type is string
-    // We'll construct via SQL in transaction
-    return `SRID=4326;POINT(${p.lng} ${p.lat})`;
-  }
-
-  async createReport(principal: AuthPrincipal | undefined, body: any) {
+  async createReport(principal: AuthPrincipal | undefined, body: CreateReportDto) {
     const userId = principal?.userId;
     // Idempoten via clientReportId (kuncinya di DB UNIQUE)
     const existing = await this.reports.findOne({
@@ -76,7 +70,7 @@ export class ReportsService {
         const outboxRepo = manager.getRepository(OutboxEvent);
 
         const code = makeIncidentCode(now);
-        const incidentId = uuidv4();
+        const incidentId = randomUUID();
         // insert dengan location geography
         await incidentRepo.query(
           `INSERT INTO incidents (id, code, type_id, status, source, summary, location, address_text, district_id, village_id, report_count, first_reported_at, version, created_at, updated_at)
@@ -98,7 +92,7 @@ export class ReportsService {
         );
         await outboxRepo.save(
           outboxRepo.create({
-            eid: uuidv4(),
+            eid: randomUUID(),
             eventType: 'incident.created',
             incidentId,
             payload: { incidentId, code },
@@ -108,7 +102,7 @@ export class ReportsService {
       }
 
       const reportRepo = manager.getRepository(IncidentReport);
-      const reportId = uuidv4();
+      const reportId = randomUUID();
       await reportRepo.query(
         `INSERT INTO incident_reports (id, incident_id, report_kind, type_id, reporter_id, channel, client_report_id, location, address_text, description, victim_hint, status, flags, occurred_at, created_at, updated_at)
          VALUES ($1,$2,$3,$4,$5,'APP',$6, ST_SetSRID(ST_MakePoint($7,$8),4326)::geography, $9,$10,$11,$12,$13,$14,$15,$16)`,
@@ -149,7 +143,7 @@ export class ReportsService {
 
   private async buildCitizenView(report: IncidentReport) {
     // Bentuk sederhana sesuai contoh; cukup untuk memenuhi kontrak dasar
-    const view: any = {
+    const view: Record<string, unknown> = {
       id: report.id,
       reportKind: report.reportKind,
       status: report.status,
@@ -166,11 +160,11 @@ export class ReportsService {
     };
     // Parse location sederhana
     try {
-      const raw: any = await this.reports.query(`SELECT ST_X(location::geometry) as lng, ST_Y(location::geometry) as lat FROM incident_reports WHERE id = $1`, [report.id]);
+      const raw = (await this.reports.query(`SELECT ST_X(location::geometry) as lng, ST_Y(location::geometry) as lat FROM incident_reports WHERE id = $1`, [report.id])) as Array<{ lat: number | string; lng: number | string }>;
       if (raw[0]) {
         view.location = { lat: Number(raw[0].lat), lng: Number(raw[0].lng) };
       }
-    } catch {}
+    } catch { /* lokasi tidak terbaca: biarkan koordinat default */ }
     if (report.incidentId && report.incident) {
       view.incident = { id: report.incident.id, code: report.incident.code };
       view.publicStatus = 'RECEIVED';
@@ -185,7 +179,7 @@ export class ReportsService {
     return { data: list.map(r => ({ id: r.id, reportKind: r.reportKind, status: r.status, createdAt: r.createdAt })), page: { hasMore: false, limit: 25 } };
   }
 
-  async getById(id: string, principal: AuthPrincipal | undefined) {
+  async getById(id: string, _principal: AuthPrincipal | undefined) {
     const report = await this.reports.findOne({ where: { id }, relations: ['incident'] });
     if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
     return this.buildCitizenView(report);
@@ -204,16 +198,15 @@ export class ReportsService {
     return { data, page: { hasMore: false, limit: 50 } };
   }
 
-  async followUp(id: string, principal: AuthPrincipal | undefined, body: any) {
+  async followUp(id: string, principal: AuthPrincipal | undefined, body: FollowUpDto) {
     const report = await this.reports.findOne({ where: { id }, relations: ['incident'] });
     if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
     if (!report.incidentId) throw AppError.validation('Laporan belum terhubung ke insiden.');
     // Buat laporan susulan terkait incident yang sama
-    const type = await this.incidentTypes.findOne({ where: { id: report.typeId } });
     const now = this.clock.now();
     const result = await this.dataSource.transaction(async (manager) => {
       const reportRepo = manager.getRepository(IncidentReport);
-      const reportId = uuidv4();
+      const reportId = randomUUID();
       // Ambil lokasi dari report existing
       const loc = await reportRepo.query(`SELECT location FROM incident_reports WHERE id = $1`, [report.id]);
       const locGeom = loc?.[0]?.location;
@@ -246,7 +239,7 @@ export class ReportsService {
     return this.buildCitizenView(result!);
   }
 
-  async withdraw(id: string, principal: AuthPrincipal | undefined, body: any) {
+  async withdraw(id: string, _principal: AuthPrincipal | undefined, _body: WithdrawDto) {
     const report = await this.reports.findOne({ where: { id }, relations: ['incident'] });
     if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
     report.status = 'WITHDRAWN';
@@ -255,7 +248,7 @@ export class ReportsService {
     return this.buildCitizenView(report);
   }
 
-  async revealContact(id: string, principal: AuthPrincipal | undefined) {
+  async revealContact(id: string, _principal: AuthPrincipal | undefined) {
     const report = await this.reports.findOne({ where: { id } });
     if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
     // Hanya contoh - sesungguhnya butuh izin dan audit

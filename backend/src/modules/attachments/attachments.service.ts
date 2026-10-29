@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 import { Attachment } from '../../database/entities/attachment.entity';
+import { CreateUploadDto } from './dto/attachments.dto';
 import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
@@ -13,10 +15,10 @@ export class AttachmentsService {
     private readonly clock: ClockService,
   ) {}
 
-  async createUpload(principal: AuthPrincipal | undefined, body: any) {
+  async createUpload(principal: AuthPrincipal | undefined, body: CreateUploadDto) {
     // Tanpa object storage nyata di lingkungan ini; buat attachment PENDING dengan presigned URL contoh
     // agar alur sesuai kontrak (PUT lalu confirm). URL bisa berupa contoh.
-    const id = require('crypto').randomUUID();
+    const id = randomUUID();
     const storageKey = `uploads/${id}/${body.fileName}`;
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
@@ -43,7 +45,7 @@ export class AttachmentsService {
     };
   }
 
-  async confirm(id: string, principal: AuthPrincipal | undefined) {
+  async confirm(id: string, _principal: AuthPrincipal | undefined) {
     const att = await this.attachments.findOne({ where: { id } });
     if (!att) throw AppError.notFound('Lampiran tidak ditemukan.');
     if (att.status === 'CONFIRMED') {
@@ -73,7 +75,7 @@ export class AttachmentsService {
     };
   }
 
-  async getUrl(id: string, principal: AuthPrincipal | undefined) {
+  async getUrl(id: string, _principal: AuthPrincipal | undefined) {
     const att = await this.attachments.findOne({ where: { id } });
     if (!att) throw AppError.notFound('Lampiran tidak ditemukan.');
     const now = this.clock.now();
