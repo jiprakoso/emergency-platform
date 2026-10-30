@@ -264,6 +264,23 @@ export class IncidentsQueryDto {
   cursor?: string;
 }
 
+/** Query `GET /incidents/{id}/nearby` (kontrak: bawaan 300 m / 6 jam; batas atas A-025). */
+export class NearbyQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  radiusM: number = 300;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  hours: number = 6;
+}
+
 /** Query `GET /incidents/{id}/events` (kursor `afterId`). */
 export class EventsQueryDto extends PageQueryDto {
   @IsOptional()

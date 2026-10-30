@@ -139,3 +139,15 @@ dihapus setelah suite selesai.
 ## A-023: Pemeriksaan status akun di setiap permintaan
 - Konteks: syarat selesai §7.2 `auth` ("akun nonaktif langsung ditolak") dan S7.
 - Asumsi: `JwtAuthGuard` membaca `users.status` (pencarian PK) di setiap permintaan terautentikasi, tanpa cache, agar berlaku seketika; akun `SUSPENDED`/`DEACTIVATED` → `403 ACCOUNT_DEACTIVATED` (kode yang sama dengan login). Untuk skala pilot dapat diganti penanda Redis yang ditulis saat penonaktifan (Fase 5) tanpa mengubah perilaku.
+
+## A-024: View responder pada `GET /incidents/{id}`
+- Konteks: kontrak `GET /incidents/{id}` → `DispatcherViewIncident | OfferView | UnitView`; `OfferView`/`UnitView` berpusat pada dispatch (`dispatchId` wajib). REST §4.1 tidak merinci organisasi lead tanpa dispatch, maupun dispatch NOTIFY.
+- Asumsi: responder melihat incident lewat dispatch milik unit/organisasinya (prioritas: unitnya sendiri, lalu yang sudah diterima, lalu terbaru). Tanpa dispatch → 404, termasuk organisasi lead (aksi lead seperti milestone tetap lewat endpointnya). `UnitView` hanya untuk dispatch RESPOND yang sudah diterima (`accepted_at` atau status ACCEPTED/EN_ROUTE/ON_SCENE/DONE); dispatch NOTIFY (IGD) selalu `OfferView` — tanpa lokasi kejadian. `note` dispatch = `null` (kolom belum ada; Fase 3). `distanceM` dari `units.last_location` bila diketahui.
+
+## A-025: `dispatchSummary`, `attentionReasons`, batas `nearby`
+- Konteks: REST §5.5 hanya menyebut nama field dan contoh alasan.
+- Asumsi: `active` = ACCEPTED/EN_ROUTE/ON_SCENE + NOTIFY yang belum final; `byOrganization` = organisasi dengan dispatch aktif. Alasan perhatian (hanya incident SUBMITTED/VERIFIED/IN_PROGRESS): `NEEDS_REPLACEMENT` = ada dispatch RESPOND REJECTED/EXPIRED tanpa dispatch RESPOND baru sesudahnya; `UNSEEN_OFFER` = OFFERED belum dilihat lewat `offer_unseen_seconds` (seed: 60 s, = W4); `PENDING_RESOURCE_REQUEST` = resource request PENDING; `SUGGESTED_DUPLICATE` = incident SUBMITTED yang laporannya punya `suggested_incident_id`. `nearby`: `radiusM` 1–10.000, `hours` 1–168, hanya incident aktif.
+
+## A-026: Visibilitas event dan timeline warga
+- Konteks: REST §5.4 timeline warga = event `PUBLIC`; ERD `visibility`; kosakata `event_type` masih CC-011.
+- Asumsi: event `incident.created`, `incident.verified`, `incident.invalidated`, `incident.resolved` ditulis `PUBLIC`; timeline menampilkan teks baku §4.2 ("Laporan diterima.", "Laporan diverifikasi.", "Laporan tidak dapat ditindaklanjuti.", "Penanganan selesai.") tanpa aktor/payload. Catatan resolve/close disimpan sebagai `payload.resolutionNote` (tidak ditampilkan di event view). Milestone ditulis `UNITS` (koordinasi lapangan terlihat unit terkait). Responder terkait melihat event `UNITS`/`PUBLIC` (+`LEAD` bila organisasinya lead).

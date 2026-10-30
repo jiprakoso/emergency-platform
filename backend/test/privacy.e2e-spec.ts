@@ -303,7 +303,7 @@ describe('Privasi & akses (S7) + audit', () => {
 
       const confirmed = await http.post(`/api/v1/attachments/${id}/confirm`).set(auth(citizenA.token));
       expect(confirmed.status).toBe(200);
-      expect(confirmed.body.data).toMatchObject({ kind: 'IMAGE', status: 'CONFIRMED', reportId: null });
+      expect(confirmed.body.data).toEqual({ id, fileName: 'foto.jpg', mimeType: 'image/jpeg', kind: 'IMAGE', status: 'CONFIRMED' });
       expect((await http.get(`/api/v1/attachments/${id}/url`).set(auth(dispatcher))).status).toBe(200);
     });
   });

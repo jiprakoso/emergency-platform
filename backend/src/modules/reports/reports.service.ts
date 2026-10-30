@@ -17,6 +17,10 @@ import { AuditContext, AuditService } from '../audit/audit.service';
 import { SystemSetting } from '../../database/entities/system-setting.entity';
 import { RateLimitService } from '../../common/rate-limit/rate-limit.service';
 import { RateLimitRule, RateLimitRules } from '../../common/rate-limit/rate-limit.rules';
+import { resolveOccurredAt } from '../../common/time/occurred-at';
+import { PageQueryDto } from '../../common/pagination/page-query.dto';
+import { RegionLookupService } from '../me/region-lookup.service';
+import { ReportViewLoader } from './report-view.loader';
 
 /** Bentuk `system_settings.report_rate_limit` (seed §8). */
 type ReportRateLimitSetting = {
@@ -53,6 +57,8 @@ export class ReportsService {
     private readonly clock: ClockService,
     private readonly audit: AuditService,
     private readonly rateLimit: RateLimitService,
+    private readonly views: ReportViewLoader,
+    private readonly regions: RegionLookupService,
   ) {}
 
   private async setting<T>(key: string): Promise<T | null> {
@@ -130,7 +136,7 @@ export class ReportsService {
     if (existing.reporterId !== userId) {
       throw new AppError('IDEMPOTENCY_CONFLICT', 'clientReportId sudah dipakai untuk laporan lain.');
     }
-    return { data: await this.buildCitizenView(existing), _status: 200 };
+    return { data: await this.views.one(existing.id), _status: 200 };
   }
 
   private findByClientReportId(manager: EntityManager | null, clientReportId: string) {
@@ -168,7 +174,11 @@ export class ReportsService {
     let consumed = false;
 
     const now = this.clock.now();
-    const occurredAt = body.occurredAt ? new Date(body.occurredAt) : now;
+    // REST §1.5: warga tidak boleh mundur >24 jam (staf boleh, mis. input atas nama penelepon).
+    const occurredAt = resolveOccurredAt(now, body.occurredAt ? new Date(body.occurredAt) : undefined, principal.userType === 'STAFF');
+    // Wilayah dari titik (PostGIS). Di luar wilayah layanan tidak ditolak: flag OUT_OF_AREA (REST §5.4).
+    const region = await this.regions.resolve(body.location.lng, body.location.lat);
+    const flags = region.inServiceArea ? null : JSON.stringify(['OUT_OF_AREA']);
 
     let outcome: { report: IncidentReport; created: boolean };
     try {
@@ -195,9 +205,10 @@ export class ReportsService {
           // insert dengan location geography
           await incidentRepo.query(
             `INSERT INTO incidents (id, code, type_id, status, source, summary, location, address_text, district_id, village_id, report_count, first_reported_at, version, created_at, updated_at)
-             VALUES ($1,$2,$3,'SUBMITTED','MOBILE_APP',$4, ST_SetSRID(ST_MakePoint($5,$6),4326)::geography, $7, NULL, NULL, 1, $8, 1, $9, $10)`,
-            [incidentId, code, type.id, body.description?.substring(0, 255) || type.name, body.location.lng, body.location.lat, body.addressText || null, occurredAt, now, now],
+             VALUES ($1,$2,$3,'SUBMITTED','MOBILE_APP',$4, ST_SetSRID(ST_MakePoint($5,$6),4326)::geography, $7, $11, $12, 1, $8, 1, $9, $10)`,
+            [incidentId, code, type.id, body.description?.substring(0, 255) || type.name, body.location.lng, body.location.lat, body.addressText || null, occurredAt, now, now, region.district?.id ?? null, region.village?.id ?? null],
           );
+          if (flags) await incidentRepo.query(`UPDATE incidents SET flags = $2::jsonb WHERE id = $1`, [incidentId, flags]);
           incident = await incidentRepo.findOne({ where: { id: incidentId } });
 
           await incidentEventsRepo.save(
@@ -205,7 +216,8 @@ export class ReportsService {
               incidentId,
               eventType: 'incident.created',
               actorUserId: userId,
-              visibility: 'INTERNAL',
+              // PUBLIC: muncul di timeline warga sebagai "Laporan diterima." (REST §4.2).
+              visibility: 'PUBLIC',
               occurredAt: now,
               recordedAt: now,
               payload: { source: 'MOBILE_APP' },
@@ -240,7 +252,7 @@ export class ReportsService {
             body.description || null,
             body.victimHint || null,
             body.reportKind === 'HELP_REQUEST' && incident ? 'LINKED' : 'NEW',
-            body.reportKind === 'CONDITION_REPORT' ? JSON.stringify(['OUT_OF_AREA']) : null, // placeholder
+            flags,
             occurredAt,
             now,
             now,
@@ -263,62 +275,21 @@ export class ReportsService {
     }
 
     if (!outcome.created) return this.replay(outcome.report, userId);
-    return { data: await this.buildCitizenView(outcome.report), _status: 201 };
+    return { data: await this.views.one(outcome.report.id), _status: 201 };
   }
 
-  private async buildCitizenView(report: IncidentReport) {
-    // Bentuk sederhana sesuai contoh; cukup untuk memenuhi kontrak dasar
-    const view: Record<string, unknown> = {
-      id: report.id,
-      reportKind: report.reportKind,
-      status: report.status,
-      location: { lat: 0, lng: 0 }, // akan diisi jika perlu; tapi kontrak minta object
-      addressText: report.addressText,
-      description: report.description,
-      flags: report.flags || [],
-      operatingNow: true,
-      createdAt: report.createdAt?.toISOString(),
-      attachments: [],
-      emergencyContacts: [
-        { name: 'Darurat Terpadu (contoh)', phone: '000-112' },
-      ],
-    };
-    // Parse location sederhana
-    try {
-      const raw = (await this.reports.query(`SELECT ST_X(location::geometry) as lng, ST_Y(location::geometry) as lat FROM incident_reports WHERE id = $1`, [report.id])) as Array<{ lat: number | string; lng: number | string }>;
-      if (raw[0]) {
-        view.location = { lat: Number(raw[0].lat), lng: Number(raw[0].lng) };
-      }
-    } catch { /* lokasi tidak terbaca: biarkan koordinat default */ }
-    if (report.incidentId && report.incident) {
-      view.incident = { id: report.incident.id, code: report.incident.code };
-      view.publicStatus = 'RECEIVED';
-    }
-    return view;
+  async mine(principal: AuthPrincipal, query: PageQueryDto) {
+    return this.views.mine(principal.userId, { limit: query.limit, cursor: query.cursor });
   }
 
-  async mine(principal: AuthPrincipal | undefined) {
-    const userId = principal?.userId;
-    const list = await this.reports.find({ where: { reporterId: userId }, order: { createdAt: 'DESC' }, take: 25 });
-    // return page envelope style? controller will wrap
-    return { data: list.map(r => ({ id: r.id, reportKind: r.reportKind, status: r.status, createdAt: r.createdAt })), page: { hasMore: false, limit: 25 } };
-  }
-
-  async getById(id: string, principal: AuthPrincipal | undefined) {
-    const report = await this.findOwned(id, principal, ['incident']);
-    return this.buildCitizenView(report);
-  }
-
-  async timeline(id: string, principal: AuthPrincipal | undefined) {
+  async getById(id: string, principal: AuthPrincipal) {
     const report = await this.findOwned(id, principal);
-    // Ambil incident_events terkait jika ada incident (hanya PUBLIC untuk warga)
-    const events = report.incidentId
-      ? await this.incidentEvents.find({ where: { incidentId: report.incidentId }, order: { id: 'ASC' }, take: 50 })
-      : [];
-    const data = events
-      .filter((e) => e.visibility === 'PUBLIC')
-      .map((e) => ({ id: String(e.id), type: e.eventType, at: e.occurredAt?.toISOString(), visibility: e.visibility }));
-    return { data, page: { hasMore: false, limit: 50 } };
+    return this.views.one(report.id);
+  }
+
+  async timeline(id: string, principal: AuthPrincipal) {
+    const report = await this.findOwned(id, principal);
+    return this.views.timeline(report.incidentId);
   }
 
   async followUp(id: string, principal: AuthPrincipal, body: FollowUpDto) {
@@ -331,7 +302,7 @@ export class ReportsService {
       if (dup.reporterId !== userId || dup.incidentId !== incidentId) {
         throw new AppError('IDEMPOTENCY_CONFLICT', 'clientReportId sudah dipakai untuk laporan lain.');
       }
-      return this.buildCitizenView(dup);
+      return this.views.one(dup.id);
     };
     const existing = await this.findByClientReportId(null, body.clientReportId);
     if (existing) return replayFollowUp(existing);
@@ -358,7 +329,7 @@ export class ReportsService {
         await this.linkAttachments(manager, body.attachmentIds, userId, reportId, incidentId);
         return { report: (await reportRepo.findOne({ where: { id: reportId }, relations: ['incident'] }))!, created: true };
       });
-      return result.created ? this.buildCitizenView(result.report) : replayFollowUp(result.report);
+      return result.created ? this.views.one(result.report.id) : replayFollowUp(result.report);
     } catch (e) {
       if (isUniqueViolation(e)) {
         const dup = await this.findByClientReportId(null, body.clientReportId);
@@ -372,8 +343,7 @@ export class ReportsService {
     const report = await this.findOwned(id, principal, ['incident']);
     report.status = 'WITHDRAWN';
     await this.reports.save(report);
-    // Catat audit/event sederhana
-    return this.buildCitizenView(report);
+    return this.views.one(report.id);
   }
 
   /**

@@ -8,6 +8,7 @@ import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
 import { PermissionService } from '../permissions/permission.service';
+import { toAttachmentRef } from '../incidents/incident-views';
 
 @Injectable()
 export class AttachmentsService {
@@ -61,33 +62,15 @@ export class AttachmentsService {
     };
   }
 
+  /** AttachmentView (kontrak): AttachmentRef + `status`. Idempoten bila sudah CONFIRMED. */
   async confirm(id: string, principal: AuthPrincipal | undefined) {
     const att = await this.findAccessible(id, principal, false);
-    if (att.status === 'CONFIRMED') {
-      return {
-        id: att.id,
-        kind: att.kind,
-        status: att.status,
-        mimeType: att.mimeType,
-        sizeBytes: att.sizeBytes ? Number(att.sizeBytes) : null,
-        incidentId: att.incidentId,
-        reportId: att.reportId,
-        confirmedAt: att.confirmedAt?.toISOString() ?? this.clock.nowIso(),
-      };
+    if (att.status !== 'CONFIRMED') {
+      att.status = 'CONFIRMED';
+      att.confirmedAt = this.clock.now();
+      await this.attachments.save(att);
     }
-    att.status = 'CONFIRMED';
-    att.confirmedAt = this.clock.now();
-    await this.attachments.save(att);
-    return {
-      id: att.id,
-      kind: att.kind,
-      status: att.status,
-      mimeType: att.mimeType,
-      sizeBytes: att.sizeBytes ? Number(att.sizeBytes) : null,
-      incidentId: att.incidentId,
-      reportId: att.reportId,
-      confirmedAt: att.confirmedAt.toISOString(),
-    };
+    return { ...toAttachmentRef(att), status: att.status };
   }
 
   async getUrl(id: string, principal: AuthPrincipal | undefined) {

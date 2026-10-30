@@ -10,13 +10,17 @@ import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
 import { PermissionService } from '../permissions/permission.service';
 import { randomUUID } from 'node:crypto';
-import { IncidentReport } from '../../database/entities/incident-report.entity';
 import { IncidentCasualty } from '../../database/entities/incident-casualty.entity';
-import { resolvePublicStatus } from './resolve-public-status';
 import { assertTransition } from './status-engine';
 import { AuditContext, AuditService } from '../audit/audit.service';
+import { eventSource, IncidentViewLoader } from './incident-view.loader';
+import { toEventView } from './incident-views';
+import { PageQueryDto } from '../../common/pagination/page-query.dto';
+import { ReportViewLoader } from '../reports/report-view.loader';
+import { resolveOccurredAt } from '../../common/time/occurred-at';
 import type { EventVisibility } from '../../database/entities/incident-event.entity';
 import type { IncidentStatus } from '../../database/entities/incident.entity';
+import type { EventsQueryDto, IncidentsQueryDto } from './dto/incidents.dto';
 import type {
   CasualtyBody,
   CloseBody,
@@ -31,7 +35,6 @@ import type {
   VerifyBody,
 } from './dto/incidents.dto';
 
-const NOTE_VISIBILITIES: readonly EventVisibility[] = ['INTERNAL', 'LEAD', 'UNITS'];
 /** Incident tujuan merge harus masih aktif. */
 const MERGE_TARGET_STATUSES: readonly IncidentStatus[] = ['SUBMITTED', 'VERIFIED', 'IN_PROGRESS'];
 /** Lead dapat diubah selama incident belum selesai/ditutup. */
@@ -61,6 +64,8 @@ export class IncidentsService {
     private readonly permissions: PermissionService,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly audit: AuditService,
+    private readonly views: IncidentViewLoader,
+    private readonly reportViews: ReportViewLoader,
   ) {}
 
   /**
@@ -80,116 +85,20 @@ export class IncidentsService {
     return { related: isLead || rows.length > 0, isLead, accepted };
   }
 
-  /** geography (driver PostGIS) → {lat, lng} tanpa `any`. */
-  private coords(raw: string): { lat: number | undefined; lng: number | undefined } {
-    const point = raw as unknown as { coordinates?: [number, number] };
-    return { lat: point.coordinates?.[1], lng: point.coordinates?.[0] };
+  /** `GET /incidents` — antrean dispatcher (IncidentSummary + filter + kursor). */
+  list(query: IncidentsQueryDto) {
+    return this.views.list(query);
   }
 
-  async list() {
-    const list = await this.incidents.find({ order: { createdAt: 'DESC' }, take: 25 });
-    const data = list.map((i) => ({
-      id: i.id,
-      code: i.code,
-      status: i.status,
-      severity: i.severity,
-      createdAt: i.createdAt,
-    }));
-    return { data, page: { hasMore: false, limit: 25 } };
-  }
-
+  /**
+   * `GET /incidents/{id}` sesuai audiens (REST §4.1): DispatcherView untuk pemegang
+   * `incident.read_all`; selain itu OfferView/UnitView dari dispatch milik responder.
+   */
   async getById(id: string, principal: AuthPrincipal) {
-    const inc = await this.incidents.findOne({ where: { id }, relations: ['type', 'district', 'village', 'leadOrganization'] });
-    if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-    const canReadAll = await this.permissions.hasPermission(principal.userId, 'incident.read_all');
-    // Responder tanpa relasi: 404, bukan 403, agar keberadaan incident tidak bocor.
-    const relation = canReadAll ? null : await this.relationOf(inc, principal);
-    if (relation && !relation.related) throw AppError.notFound('Insiden tidak ditemukan.');
-
-    // Calculate publicStatus using the status engine
-    const publicStatus = await resolvePublicStatus(this.dataSource, inc.id);
-
-    // Query casualties - get the latest casualty record
-    const casualtyRepo = this.incidents.manager.getRepository('IncidentCasualty');
-    const casualty = await casualtyRepo.findOne({ where: { incidentId: inc.id }, order: { reportedAt: 'DESC' } });
-
-    // Query dispatches - get all dispatches for this incident
-    const dispatchRepo = this.incidents.manager.getRepository('Dispatch');
-    const dispatches = await dispatchRepo.find({ where: { incidentId: inc.id } });
-
-    if (canReadAll) {
-      // Full DispatcherViewIncident shape
-      const dispatchList = dispatches.map(d => ({
-        organization: d.leadOrganization ? { id: d.leadOrganization.id, name: d.leadOrganization.name } : undefined,
-        unit: d.unit ? { id: d.unit.id, name: d.unit.name, status: d.status } : undefined,
-        status: d.status,
-        type: d.type,
-      }));
-      const casualtyData = casualty ? {
-        injured: casualty.injuredCount,
-        deceased: casualty.deceasedCount,
-        critical: casualty.criticalCount,
-        missing: casualty.missingCount,
-      } : null;
-      return {
-        id: inc.id,
-        code: inc.code,
-        type: inc.type ? { code: inc.type.code, name: inc.type.name } : undefined,
-        status: inc.status,
-        publicStatus: publicStatus,
-        severity: inc.severity,
-        escalationLevel: inc.escalationLevel,
-        district: inc.district ? { code: inc.district.code, name: inc.district.name } : undefined,
-        village: inc.village ? { code: inc.village.code, name: inc.village.name } : undefined,
-        location: inc.location ? this.coords(inc.location) : undefined,
-        addressText: inc.addressText,
-        summary: inc.summary,
-        leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
-        reporter: { name: null, phoneMasked: null },
-        attachments: [],
-        casualties: casualtyData,
-        dispatches: dispatchList,
-        lockedBy: inc.lockedBy,
-        lockedAt: inc.lockedAt?.toISOString() ?? null,
-        version: inc.version,
-        createdAt: inc.createdAt,
-        updatedAt: inc.updatedAt,
-      };
+    if (await this.permissions.hasPermission(principal.userId, 'incident.read_all')) {
+      return this.views.dispatcherView(id);
     }
-    // Responder: lokasi presisi, alamat, lampiran, pelapor tidak pernah dikirim di sini.
-    // Sebelum accept (OfferView §4.1) dispatch unit lain dan data korban juga disembunyikan.
-    const showOperational = relation!.accepted || relation!.isLead;
-    const casualtyData = casualty ? {
-      injured: casualty.injuredCount,
-      deceased: casualty.deceasedCount,
-      critical: casualty.criticalCount,
-      missing: casualty.missingCount,
-    } : null;
-    const dispatchList = dispatches.map(d => ({
-      organization: d.leadOrganization ? { id: d.leadOrganization.id, name: d.leadOrganization.name } : undefined,
-      unit: d.unit ? { id: d.unit.id, name: d.unit.name, status: d.status } : undefined,
-      status: d.status,
-      type: d.type,
-    }));
-    return {
-      id: inc.id,
-      code: inc.code,
-      type: inc.type ? { code: inc.type.code, name: inc.type.name } : undefined,
-      status: inc.status,
-      publicStatus: publicStatus,
-      severity: inc.severity,
-      escalationLevel: inc.escalationLevel,
-      district: inc.district ? { code: inc.district.code, name: inc.district.name } : undefined,
-      village: inc.village ? { code: inc.village.code, name: inc.village.name } : undefined,
-      // Location NOT visible to responders who haven't accepted
-      addressText: undefined,
-      summary: undefined,
-      leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
-      reporter: { name: null, phoneMasked: null },
-      attachments: [],
-      casualties: showOperational ? casualtyData : null,
-      dispatches: showOperational ? dispatchList : [],
-    };
+    return this.views.responderView(id, principal);
   }
 
   private async getLockSeconds(): Promise<number> {
@@ -231,13 +140,14 @@ export class IncidentsService {
     actorUserId: string,
     now: Date,
     payload: Record<string, unknown> = {},
+    visibility: EventVisibility = 'INTERNAL',
   ): Promise<void> {
     await manager.getRepository(IncidentEvent).save(
       manager.getRepository(IncidentEvent).create({
         incidentId,
         eventType,
         actorUserId,
-        visibility: 'INTERNAL',
+        visibility,
         occurredAt: now,
         recordedAt: now,
         payload,
@@ -364,7 +274,7 @@ export class IncidentsService {
   async verify(id: string, principal: AuthPrincipal, body: VerifyBody) {
     const userId = principal.userId;
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       const inc = await this.loadForUpdate(manager, id);
       this.assertHoldsLock(inc, userId, now);
       this.assertVersion(inc, body.version);
@@ -398,15 +308,16 @@ export class IncidentsService {
       inc.version += 1;
       inc.updatedAt = now;
       await manager.getRepository(Incident).save(inc);
-      await this.recordEvent(manager, inc.id, 'incident.verified', userId, now, { severity: inc.severity, leadOrganizationId: inc.leadOrganizationId });
+      await this.recordEvent(manager, inc.id, 'incident.verified', userId, now, { severity: inc.severity, leadOrganizationId: inc.leadOrganizationId }, 'PUBLIC');
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
   async invalidate(id: string, principal: AuthPrincipal, body: InvalidateBody, ctx: AuditContext = {}) {
     const userId = principal.userId;
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       const inc = await this.loadForUpdate(manager, id);
       this.assertHoldsLock(inc, userId, now);
       this.assertVersion(inc, body.version);
@@ -425,7 +336,7 @@ export class IncidentsService {
             AND user_type = 'CITIZEN'`,
         [inc.id, now],
       );
-      await this.recordEvent(manager, inc.id, 'incident.invalidated', userId, now, { reason: body.reason });
+      await this.recordEvent(manager, inc.id, 'incident.invalidated', userId, now, { reason: body.reason }, 'PUBLIC');
       await this.audit.record(
         { actorUserId: userId, action: 'incident.invalidate', entityType: 'incident', entityId: inc.id, before, after: { status: inc.status } },
         ctx,
@@ -433,6 +344,7 @@ export class IncidentsService {
       );
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
   async merge(id: string, principal: AuthPrincipal, body: MergeBody, ctx: AuditContext = {}) {
@@ -441,7 +353,7 @@ export class IncidentsService {
     if (body.targetIncidentId === id) {
       throw AppError.validation('Insiden tidak dapat digabung ke dirinya sendiri.', [{ field: 'targetIncidentId', issue: 'invalid' }]);
     }
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       // Kunci baris berurutan id agar dua merge silang tidak deadlock.
       const [first, second] = [id, body.targetIncidentId].sort();
       const locked = new Map<string, Incident>();
@@ -488,12 +400,13 @@ export class IncidentsService {
       );
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
   async setLead(id: string, principal: AuthPrincipal, body: LeadBody, ctx: AuditContext = {}) {
     const userId = principal.userId;
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       const inc = await this.loadForUpdate(manager, id);
       this.assertHoldsLock(inc, userId, now);
       if (!LEAD_EDITABLE_STATUSES.includes(inc.status)) {
@@ -515,12 +428,13 @@ export class IncidentsService {
       );
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
   async resolve(id: string, principal: AuthPrincipal, body: ResolveBody) {
     const userId = principal.userId;
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       const inc = await this.loadForUpdate(manager, id);
       this.assertHoldsLock(inc, userId, now);
       this.assertVersion(inc, body.version);
@@ -551,15 +465,16 @@ export class IncidentsService {
       inc.version += 1;
       inc.updatedAt = now;
       await manager.getRepository(Incident).save(inc);
-      await this.recordEvent(manager, inc.id, 'incident.resolved', userId, now, { note: body.note, closedDispatches: active.length });
+      await this.recordEvent(manager, inc.id, 'incident.resolved', userId, now, { resolutionNote: body.note, closedDispatches: active.length }, 'PUBLIC');
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
   async close(id: string, principal: AuthPrincipal, body: CloseBody) {
     const userId = principal.userId;
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       const inc = await this.loadForUpdate(manager, id);
       this.assertHoldsLock(inc, userId, now);
       this.assertVersion(inc, body.version);
@@ -569,42 +484,20 @@ export class IncidentsService {
       inc.version += 1;
       inc.updatedAt = now;
       await manager.getRepository(Incident).save(inc);
-      await this.recordEvent(manager, inc.id, 'incident.closed', userId, now, { note: body.note });
+      await this.recordEvent(manager, inc.id, 'incident.closed', userId, now, { resolutionNote: body.note });
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
-  async nearby(id: string, radiusM = 300, hours = 6) {
-    const inc = await this.incidents.findOne({ where: { id } });
-    if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-    try {
-      const rows = await this.incidents.query(
-        `SELECT id, code, ST_Distance(location::geography, (SELECT location FROM incidents WHERE id = $1)::geography) AS dist_m, created_at
-         FROM incidents
-         WHERE id <> $1
-           AND location IS NOT NULL
-           AND created_at >= (now() - interval '1 hour' * $2)
-           AND ST_Distance(location::geography, (SELECT location FROM incidents WHERE id = $1)::geography) <= $3
-         ORDER BY dist_m ASC
-         LIMIT 50`,
-        [id, hours, radiusM],
-      );
-      const data = rows.map((r: { id: string; code: string; dist_m: string | number; created_at: Date }) => ({
-        id: r.id,
-        code: r.code,
-        distanceM: Math.round(Number(r.dist_m)),
-        createdAt: r.created_at,
-      }));
-      return { data };
-    } catch (e) {
-      return { data: [] };
-    }
+  nearby(id: string, radiusM: number, hours: number) {
+    return this.views.nearby(id, radiusM, hours);
   }
 
   async patch(id: string, principal: AuthPrincipal, body: PatchBody) {
     const userId = principal.userId;
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const updated = await this.dataSource.transaction(async (manager) => {
       const inc = await this.loadForUpdate(manager, id);
       this.assertHoldsLock(inc, userId, now);
       this.assertVersion(inc, body.version);
@@ -638,73 +531,54 @@ export class IncidentsService {
       await this.recordEvent(manager, inc.id, 'incident.updated', userId, now, { fields: changed });
       return inc;
     });
+    return this.views.dispatcherView(updated.id);
   }
 
-  async getEvents(id: string, principal?: AuthPrincipal) {
-    const events = await this.incidentEvents.find({ where: { incidentId: id }, order: { id: 'ASC' }, take: 100 });
-    let data = events.map((e) => ({ id: String(e.id), type: e.eventType, occurredAt: e.occurredAt?.toISOString(),      visibility: e.visibility, actorName: e.actorUserId || undefined, channel: e.channel, note: e.payload?.note || e.payload?.description || undefined }));
-    // Filter by visibility according to role
-    if (principal?.userId) {
-      const userId = principal.userId;
-      const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
-      if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
-        // Dispatcher/admin see all events (tanpa penyaringan)
-      } else {
-        // Responder see only INTERNAL events, not PUBLIC
-        data = data.filter((e) => e.visibility !== 'PUBLIC');
-      }
+  /** Dispatcher: semua event; responder terkait: `UNITS`/`PUBLIC` (+`LEAD` bila lead). */
+  async getEvents(id: string, principal: AuthPrincipal, query: EventsQueryDto) {
+    let visibilities: EventVisibility[] | null = null;
+    if (!(await this.permissions.hasPermission(principal.userId, 'incident.read_all'))) {
+      const inc = await this.incidents.findOne({ where: { id } });
+      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+      const relation = await this.relationOf(inc, principal);
+      if (!relation.related) throw AppError.notFound('Insiden tidak ditemukan.');
+      visibilities = relation.isLead ? ['UNITS', 'PUBLIC', 'LEAD'] : ['UNITS', 'PUBLIC'];
     }
-    return { data, page: { hasMore: false, limit: 100 } };
+    return this.views.events(id, visibilities, { afterId: query.afterId, limit: query.limit });
   }
 
-  async getReports(id: string, principal?: AuthPrincipal) {
-    const reportsRepo = this.incidents.manager.getRepository(IncidentReport);
-    const reports = await reportsRepo.find({ where: { incidentId: id }, order: { createdAt: 'ASC' }, take: 50 });
-    let data = reports.map((r) => ({
-      id: r.id,
-      reportKind: r.reportKind,
-      status: r.status,
-      location: r.location ? this.coords(r.location) : undefined,
-      addressText: r.addressText,
-      description: r.description,
-      createdAt: r.createdAt,
-      reporter: { name: null, phoneMasked: null }, // masked
-    }));
-    // Filter by reporter ownership for warga
-    if (principal?.userId) {
-      const userId = principal.userId;
-      const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
-      if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
-        // Dispatcher/admin see all reports (tanpa penyaringan)
-      } else {
-        // Warga see only their own reports (reporterId matches)
-        // For now, filter out reports without a known reporter (masked)
-        data = data.filter((r) => r.reporter.name !== null || r.reportKind !== 'HELP_REQUEST');
-      }
-    }
-    return { data, page: { hasMore: false, limit: 50 } };
-  }
-
-  async addNote(id: string, principal: AuthPrincipal | undefined, body?: NoteBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'note.create');
-    if (!can) throw AppError.forbidden();
-    const now = this.clock.now();
-    // REST §5.5: catatan hanya INTERNAL/LEAD/UNITS — tidak pernah PUBLIC (timeline warga).
-    const visibility: EventVisibility = body?.visibility ?? 'INTERNAL';
-    if (!NOTE_VISIBILITIES.includes(visibility)) {
-      throw AppError.validation('visibility catatan harus INTERNAL, LEAD, atau UNITS.', [{ field: 'visibility', issue: 'invalid' }]);
-    }
+  /** `GET /incidents/{id}/reports`: CitizenReportView tertaut (tanpa kontak pelapor). */
+  async getReports(id: string, query: PageQueryDto) {
     if (!(await this.incidents.exist({ where: { id } }))) throw AppError.notFound('Insiden tidak ditemukan.');
-    const result = await this.incidents.manager.transaction(async (manager) => {
+    return this.reportViews.forIncident(id, { limit: query.limit, cursor: query.cursor });
+  }
+
+  async addNote(id: string, principal: AuthPrincipal, body: NoteBody) {
+    const userId = principal.userId;
+    const now = this.clock.now();
+    if (!(await this.incidents.exist({ where: { id } }))) throw AppError.notFound('Insiden tidak ditemukan.');
+    const eventId = await this.dataSource.transaction(async (manager) => {
       const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.note_added', actorUserId: userId, visibility, occurredAt: now, recordedAt: now, payload: { text: body?.text } }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.note_added', incidentId: id, payload: { incidentId: id }, createdAt: now }));
-      return { id: String(ev.id), type: ev.eventType, occurredAt: ev.occurredAt?.toISOString(), actorName: userId, note: body?.text };
+      // REST §5.5: catatan hanya INTERNAL/LEAD/UNITS (divalidasi DTO) — tidak pernah PUBLIC.
+      const ev = await evRepo.save(
+        evRepo.create({ incidentId: id, eventType: 'incident.note_added', actorUserId: userId, visibility: body.visibility, occurredAt: now, recordedAt: now, payload: { text: body.text } }),
+      );
+      await manager.getRepository(OutboxEvent).save(
+        manager.getRepository(OutboxEvent).create({ eid: randomUUID(), eventType: 'incident.note_added', incidentId: id, payload: { incidentId: id }, createdAt: now }),
+      );
+      return String(ev.id);
     });
-    return result;
+    return this.eventView(eventId);
+  }
+
+  /** Satu IncidentEventView (respons catatan/milestone) dengan `actorName` dari akun. */
+  private async eventView(eventId: string) {
+    const [row] = await this.dataSource.query(
+      `SELECT e.id::text AS id, e.event_type, e.occurred_at, u.full_name AS actor_name, e.channel, e.payload, e.visibility
+         FROM incident_events e LEFT JOIN users u ON u.id = e.actor_user_id WHERE e.id = $1`,
+      [eventId],
+    );
+    return toEventView(eventSource(row), { includeActor: true });
   }
 
   /**
@@ -754,28 +628,32 @@ export class IncidentsService {
     });
   }
 
-  async addMilestone(id: string, principal: AuthPrincipal | undefined, body?: MilestoneBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'milestone.create');
-    if (!can) throw AppError.forbidden();
+  async addMilestone(id: string, principal: AuthPrincipal, body: MilestoneBody) {
+    const userId = principal.userId;
     const inc = await this.incidents.findOne({ where: { id } });
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
     // Responder hanya bila organisasinya lead (REST §3 pembatas `lead`; S1 langkah 7).
-    if (!(await this.permissions.hasPermission(userId, 'incident.read_all'))) {
-      const relation = await this.relationOf(inc, principal!);
+    const isDispatcher = await this.permissions.hasPermission(userId, 'incident.read_all');
+    if (!isDispatcher) {
+      const relation = await this.relationOf(inc, principal);
       if (!relation.related) throw AppError.notFound('Insiden tidak ditemukan.');
       if (!relation.isLead) throw new AppError('NOT_LEAD_ORGANIZATION', 'Hanya organisasi pemegang komando yang dapat mencatat milestone.');
     }
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
+    // REST §1.5: maks 5 menit ke depan; >24 jam ke belakang hanya dispatcher/supervisor.
+    const occurredAt = resolveOccurredAt(now, body.occurredAt ? new Date(body.occurredAt) : undefined, isDispatcher);
+    const eventId = await this.dataSource.transaction(async (manager) => {
       const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.milestone', actorUserId: userId, visibility: 'INTERNAL', occurredAt: body?.occurredAt ? new Date(body.occurredAt) : now, recordedAt: now, payload: { code: body?.code, note: body?.note, ...body?.payload } }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.milestone', incidentId: id, payload: { code: body?.code }, createdAt: now }));
-      return { id: String(ev.id), type: ev.eventType, occurredAt: (ev.occurredAt || now).toISOString(), actorName: userId, code: body?.code, note: body?.note };
+      // A-026: milestone adalah koordinasi lapangan → terlihat unit terkait (`UNITS`).
+      const ev = await evRepo.save(
+        evRepo.create({ incidentId: id, eventType: 'incident.milestone', actorUserId: userId, visibility: 'UNITS', occurredAt, recordedAt: now, payload: { ...body.payload, code: body.code, note: body.note } }),
+      );
+      await manager.getRepository(OutboxEvent).save(
+        manager.getRepository(OutboxEvent).create({ eid: randomUUID(), eventType: 'incident.milestone', incidentId: id, payload: { incidentId: id, code: body.code }, createdAt: now }),
+      );
+      return String(ev.id);
     });
-    return result;
+    return this.eventView(eventId);
   }
 
   async getDispatchRecommendations(id: string) {

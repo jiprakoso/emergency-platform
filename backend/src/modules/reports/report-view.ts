@@ -28,7 +28,8 @@ export function toCitizenReportView(report: IncidentReport, src: CitizenReportVi
     id: report.id,
     reportKind: report.reportKind,
     status: report.status,
-    incident: src.incident,
+    // IncidentRef tidak nullable di kontrak: dihilangkan untuk laporan tanpa incident.
+    ...(src.incident ? { incident: src.incident } : {}),
     publicStatus: src.publicStatus,
     location: src.location ?? { lat: 0, lng: 0 },
     addressText: report.addressText,
@@ -37,6 +38,7 @@ export function toCitizenReportView(report: IncidentReport, src: CitizenReportVi
     operatingNow: src.operatingNow,
     createdAt: report.createdAt.toISOString(),
     attachments: src.attachments,
-    emergencyContacts: src.emergencyContacts,
+    // Kontrak: hanya {name, phone} (pengaturan dapat memuat field lain, mis. `note`).
+    emergencyContacts: src.emergencyContacts.map((c) => ({ name: c.name, phone: c.phone })),
   };
 }

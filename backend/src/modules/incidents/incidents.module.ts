@@ -5,14 +5,16 @@ import { IncidentEvent } from '../../database/entities/incident-event.entity';
 import { OutboxEvent } from '../../database/entities/outbox-event.entity';
 import { SystemSetting } from '../../database/entities/system-setting.entity';
 import { IncidentsService } from './incidents.service';
+import { IncidentViewLoader } from './incident-view.loader';
 import { IncidentsController } from './incidents.controller';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { AuditModule } from '../audit/audit.module';
+import { ReportsModule } from '../reports/reports.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Incident, IncidentEvent, OutboxEvent, SystemSetting]), PermissionsModule, AuditModule],
+  imports: [TypeOrmModule.forFeature([Incident, IncidentEvent, OutboxEvent, SystemSetting]), PermissionsModule, AuditModule, ReportsModule],
   controllers: [IncidentsController],
-  providers: [IncidentsService],
-  exports: [IncidentsService],
+  providers: [IncidentsService, IncidentViewLoader],
+  exports: [IncidentsService, IncidentViewLoader],
 })
 export class IncidentsModule {}

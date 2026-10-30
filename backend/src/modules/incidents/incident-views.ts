@@ -103,11 +103,18 @@ export type CasualtySnapshotData = {
 };
 
 export type DispatchUnitSummaryData = {
+  /** Hanya untuk penyaringan internal (dispatch milik sendiri); tidak dikirim ke klien. */
+  id?: string;
   organization: OrgRef;
   unit?: { id: string; name?: string; status?: string };
   status: string;
   type: string;
 };
+
+/** DispatchUnitSummary (kontrak): tanpa `id` internal. */
+function toDispatchUnitSummary(d: DispatchUnitSummaryData) {
+  return { organization: d.organization, ...(d.unit ? { unit: d.unit } : {}), status: d.status, type: d.type };
+}
 
 export type DispatcherViewSource = {
   id: string;
@@ -119,7 +126,7 @@ export type DispatcherViewSource = {
   type: CodeNameRef | null;
   district: CodeNameRef | null;
   village: CodeNameRef | null;
-  location: { lat: number | undefined; lng: number | undefined } | null;
+  location: { lat: number; lng: number } | null;
   addressText: string | null;
   description: string | null;
   summary: string | null;
@@ -154,8 +161,8 @@ export function toDispatcherView(src: DispatcherViewSource) {
     leadOrganization: src.leadOrganization ?? undefined,
     reporter: src.reporter,
     attachments: src.attachments,
-    casualties: src.casualties,
-    dispatches: src.dispatches,
+    casualties: src.casualties ?? undefined,
+    dispatches: src.dispatches.map(toDispatchUnitSummary),
     lockedBy: src.lockedBy,
     lockedAt: src.lockedAt?.toISOString() ?? null,
     version: src.version,
@@ -164,32 +171,80 @@ export function toDispatcherView(src: DispatcherViewSource) {
   };
 }
 
+/** Dispatch milik responder yang dipakai sebagai sudut pandang `OfferView`/`UnitView`. */
+export type ResponderDispatchData = {
+  id: string;
+  type: string;
+  origin: string;
+  status: string;
+  offerExpiresAt: Date | null;
+  etaMinutes: number | null;
+  destinationOrganization: OrgRef | null;
+};
+
 /**
- * Bentuk terbatas untuk responder (REST §4.1 kolom responder):
- * `preAccept` = belum accept → tanpa lokasi presisi/addressText/description/lampiran;
- * selain itu bentuk UnitViewIncident.
+ * OfferView (REST §4.1/§4.3, sebelum accept): tanpa lokasi presisi, alamat, deskripsi,
+ * lampiran, pelapor, korban, dan dispatch unit lain.
  */
-export function toResponderView(src: DispatcherViewSource, opts: { preAccept: boolean }) {
-  const base = {
-    id: src.id,
-    code: src.code,
-    type: src.type ?? undefined,
-    status: src.status,
-    publicStatus: src.publicStatus,
-    severity: src.severity ?? undefined,
-    escalationLevel: src.escalationLevel,
-    district: src.district ?? undefined,
-    village: src.village ?? undefined,
-  };
-  if (opts.preAccept) return base;
+export function toOfferView(src: DispatcherViewSource, dispatch: ResponderDispatchData, distanceM: number | null) {
   return {
-    ...base,
-    location: src.location ?? undefined,
-    addressText: src.addressText,
-    description: src.description,
-    attachments: src.attachments,
-    casualties: src.casualties,
-    otherDispatches: src.dispatches,
+    dispatchId: dispatch.id,
+    incident: {
+      code: src.code,
+      type: src.type ?? undefined,
+      severity: src.severity ?? undefined,
+      district: src.district ?? undefined,
+      village: src.village ?? undefined,
+      ...(distanceM !== null ? { distanceM } : {}),
+    },
+    type: dispatch.type,
+    origin: dispatch.origin,
+    status: dispatch.status,
+    offerExpiresAt: dispatch.offerExpiresAt?.toISOString() ?? null,
+    note: null,
+  };
+}
+
+/**
+ * UnitView (REST §4.1, sesudah accept): lokasi presisi, alamat, deskripsi, lampiran,
+ * korban; dispatch lain hanya ringkasan (`organization`, `status`, `type`) kecuali
+ * organisasi lead yang melihat unit juga. Kontak pelapor tetap tidak dikirim.
+ */
+export function toUnitView(
+  src: DispatcherViewSource,
+  dispatch: ResponderDispatchData,
+  opts: { distanceM: number | null; isLead: boolean },
+) {
+  const others = src.dispatches.map((d) =>
+    opts.isLead ? toDispatchUnitSummary(d) : { organization: d.organization, status: d.status, type: d.type },
+  );
+  return {
+    dispatchId: dispatch.id,
+    incident: {
+      id: src.id,
+      code: src.code,
+      type: src.type ?? undefined,
+      status: src.status,
+      publicStatus: src.publicStatus,
+      severity: src.severity ?? undefined,
+      escalationLevel: src.escalationLevel,
+      district: src.district ?? undefined,
+      village: src.village ?? undefined,
+      distanceM: opts.distanceM,
+      location: src.location ?? undefined,
+      addressText: src.addressText,
+      description: src.description,
+      attachments: src.attachments,
+      casualties: src.casualties ?? undefined,
+      otherDispatches: others,
+    },
+    type: dispatch.type,
+    origin: dispatch.origin,
+    status: dispatch.status,
+    offerExpiresAt: dispatch.offerExpiresAt?.toISOString() ?? null,
+    note: null,
+    etaMinutes: dispatch.etaMinutes,
+    ...(dispatch.destinationOrganization ? { destinationOrganization: dispatch.destinationOrganization } : {}),
   };
 }
 
@@ -205,11 +260,11 @@ export type EventViewSource = {
 };
 
 /**
- * IncidentEventView. `visibility` hanya ditampilkan bila bukan INTERNAL
- * (mengikuti contoh `GETIncidentsIdEvents`; INTERNAL tidak dikirim ke klien).
- * `actorName` hanya diisi untuk konteks staf — tidak untuk publik (privasi aktor).
+ * IncidentEventView (kontrak: `id`, `type`, `occurredAt`, `actorName?`, `channel?`, `code?`, `note?`).
+ * `visibility` tidak dikirim — penyaringan dilakukan sebelum serialisasi.
+ * `actorName` hanya untuk staf (privasi aktor terhadap warga).
  */
-export function toEventView(src: EventViewSource, opts: { includeActor: boolean; includeVisibility: boolean }) {
+export function toEventView(src: EventViewSource, opts: { includeActor: boolean }) {
   const view: Record<string, unknown> = {
     id: src.id,
     type: src.type,
@@ -219,6 +274,5 @@ export function toEventView(src: EventViewSource, opts: { includeActor: boolean;
   if (src.channel) view.channel = src.channel;
   if (src.code) view.code = src.code;
   if (src.note) view.note = src.note;
-  if (opts.includeVisibility && src.visibility !== 'INTERNAL') view.visibility = src.visibility;
   return view;
 }

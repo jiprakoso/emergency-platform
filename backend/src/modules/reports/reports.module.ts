@@ -12,15 +12,20 @@ import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { ClockModule } from '../../common/clock/clock.module';
 import { AuditModule } from '../audit/audit.module';
+import { MeModule } from '../me/me.module';
+import { ReferenceModule } from '../reference/reference.module';
+import { ReportViewLoader } from './report-view.loader';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([IncidentReport, Incident, IncidentType, Attachment, OutboxEvent, IncidentEvent, User, SystemSetting]),
     ClockModule,
     AuditModule,
+    MeModule,
+    ReferenceModule,
   ],
   controllers: [ReportsController],
-  providers: [ReportsService],
-  exports: [ReportsService],
+  providers: [ReportsService, ReportViewLoader],
+  exports: [ReportsService, ReportViewLoader],
 })
 export class ReportsModule {}

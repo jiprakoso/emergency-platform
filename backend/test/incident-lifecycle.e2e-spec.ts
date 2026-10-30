@@ -178,7 +178,7 @@ describe('Incident: siklus hidup, kunci, version (S6)', () => {
       const { incidentId: fire } = await newIncident('FIRE');
       await lock(fire);
       const res = await act(fire, 'verify', { version: 1, severity: 'HIGH' });
-      expect(res.body.data.leadOrganizationId).toBe(orgIds.DAMKAR);
+      expect(res.body.data.leadOrganization.id).toBe(orgIds.DAMKAR);
     });
 
     it('verify dengan lead organisasi tak dikenal → 400', async () => {

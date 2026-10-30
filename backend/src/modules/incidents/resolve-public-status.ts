@@ -52,3 +52,38 @@ export async function resolvePublicStatus(
   const agg = await resolveDispatchAgg(ds, leaf.id);
   return computePublicStatus(leaf.status, agg);
 }
+
+/**
+ * Versi batch `resolvePublicStatus` untuk daftar (tanpa N+1): rantai DUPLICATE
+ * diselesaikan per incident, lalu agregat dispatch dihitung untuk incident induknya.
+ */
+export async function resolvePublicStatuses(
+  ds: Pick<DataSource, 'query'>,
+  incidentIds: string[],
+): Promise<Map<string, PublicStatus>> {
+  const out = new Map<string, PublicStatus>();
+  const ids = [...new Set(incidentIds)];
+  if (ids.length === 0) return out;
+  const rows = (await ds.query(
+    `WITH RECURSIVE chain AS (
+       SELECT id AS origin, id, status, duplicate_of_id, 0 AS depth FROM incidents WHERE id = ANY($1::uuid[])
+       UNION ALL
+       SELECT c.origin, i.id, i.status, i.duplicate_of_id, c.depth + 1
+         FROM incidents i JOIN chain c ON i.id = c.duplicate_of_id
+        WHERE c.status = 'DUPLICATE' AND c.depth < 5
+     ), leaf AS (
+       SELECT DISTINCT ON (origin) origin, id, status FROM chain ORDER BY origin, depth DESC
+     )
+     SELECT l.origin, l.status,
+            COALESCE(BOOL_OR(d.status IN ('OFFERED','ACCEPTED')), false) AS offered,
+            COALESCE(BOOL_OR(d.status = 'EN_ROUTE'), false) AS en_route,
+            COALESCE(BOOL_OR(d.status = 'ON_SCENE'), false) AS on_scene
+       FROM leaf l LEFT JOIN dispatches d ON d.incident_id = l.id
+      GROUP BY l.origin, l.status`,
+    [ids],
+  )) as Array<{ origin: string; status: IncidentStatus; offered: boolean; en_route: boolean; on_scene: boolean }>;
+  for (const r of rows) {
+    out.set(r.origin, computePublicStatus(r.status, { offeredOrAccepted: r.offered, enRoute: r.en_route, onScene: r.on_scene }));
+  }
+  return out;
+}
