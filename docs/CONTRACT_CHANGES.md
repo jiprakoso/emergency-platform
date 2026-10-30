@@ -155,3 +155,10 @@ yang tidak memaksakan salah satu pihak:
 - Usulan: (1) kembalikan berkas `1700000001000` ke isi saat diterapkan; (2) migrasi baru yang (a) menetapkan nilai `kind` sesuai keputusan CC-012, (b) melonggarkan CHECK kepemilikan menjadi `status = 'PENDING' OR <salah satu FK terisi>`, plus kolom `purpose` bila diperlukan. Kontrak tidak berubah.
 - Keputusan (D-014, 2026-10-30): kembalikan berkas + migrasi baru; syarat relasi **dihapus seluruhnya** (bukan hanya untuk `PENDING`), karena jalur `attachmentIds` di `POST /reports` membutuhkan lampiran `CONFIRMED` yang belum terkait.
 - Status: approved — diterapkan 2026-10-30: `1700000001000-core-schema.ts` dikembalikan ke isi sebelum `65841e1`; migrasi `1700000002000-attachments-kind-relation.ts` (naik→turun→naik bersih di DB dev; klon bersih 3 migrasi lulus e2e).
+
+## CC-015: `INCIDENT_LOCKED` — `lockedBy`/`lockedAt` di dokumen, tidak ada di `ErrorBody`
+- Tanggal: 2026-10-30
+- Sumber: REST §7 dan §5.5 menyatakan respons `409 INCIDENT_LOCKED` memuat `lockedBy`, `lockedAt`; skema kontrak `ErrorBody` hanya punya `currentVersion` (untuk `VERSION_CONFLICT`), dan contoh `rest/errors/INCIDENT_LOCKED.json` tanpa kedua field.
+- Penerapan sementara: server **tidak** mengirim `lockedBy`/`lockedAt` (tidak menambah field di luar kontrak, AGENTS.md #1). `VERSION_CONFLICT` kini mengirim `currentVersion` sesuai kontrak.
+- Usulan: tambahkan `lockedBy` (uuid|null) dan `lockedAt` (date-time|null) opsional ke `ErrorBody` + contoh, agar dashboard bisa menampilkan siapa pemegang kunci tanpa GET tambahan.
+- Status: proposed — diputuskan di C1.

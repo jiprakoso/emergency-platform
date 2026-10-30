@@ -224,4 +224,23 @@ Rencana penutupan C1 (urutan): **(1) keamanan/PII + audit + S7** → (2) idempot
 - Tes: `test/reports-idempotency.e2e-spec.ts` (10 e2e: berurutan 201/200/200, 5× bersamaan, pelapor lain 422, CONDITION_REPORT tanpa incident, 429 + Retry-After + pengulangan tidak dihitung, gagal validasi tidak memakan jatah, lampiran orang lain/dipakai ulang/berlebih ditolak, follow-up bersamaan). Helper `resetReportRateLimits`/`userIdOf` di `e2e-utils`; `privacy.e2e-spec` me-reset penghitung laporan per fixture.
 - Verifikasi 2026-10-30: unit 53/53, e2e **47/47** (3× berturut-turut, stabil), `make lint`, `make contract`, `make verify` V1–V11 hijau.
 - Asumsi: A-020.
-- Status C1: belum — lanjut langkah 3 (mesin status & kunci, termasuk cek status akun nonaktif di guard).
+- Status: langkah 2 selesai (commit `5bcdc51`).
+
+### 2b - Langkah 3 C1: mesin status, kunci, version, akun nonaktif (2026-10-30)
+- [x] **Mesin status dipakai**: verify/invalidate/merge/resolve/close memanggil `assertTransition` (tabel §6.1). `invalidate` dari `VERIFIED` kini diizinkan; merge memeriksa status sumber; transisi lain → `409 INVALID_STATUS_TRANSITION`. PATCH dan set lead ditolak setelah RESOLVED/CLOSED/INVALID/DUPLICATE.
+- [x] **Badan tervalidasi**: DTO incident menjadi kelas class-validator sesuai `required` kontrak — `version` wajib (verify/invalidate/merge/resolve/close/PATCH), `severity` wajib di verify, `reason` di invalidate/lead, enum `visibility` catatan & kode milestone, korban bilangan ≥ 0 → `400 VALIDATION_FAILED`.
+- [x] **Optimistic locking**: `SELECT … FOR UPDATE` + `version` dalam transaksi; `409 VERSION_CONFLICT` kini memuat `currentVersion` (sebelumnya kode meneruskan `body.version` sebagai *status HTTP*).
+- [x] **Kunci**: setiap aksi dispatcher yang mengubah incident (termasuk set lead, resolve, close, korban) wajib memegang kunci yang **belum kedaluwarsa**; ambil-alih atomik terhadap pemegang yang terlihat; `renew` atomik dan menolak kunci kedaluwarsa; `unlock` idempoten, orang lain tanpa override → 403, supervisor → 204 + audit `incident.lock_override`. Kunci **tidak menaikkan `version`** (metadata; `IncidentLockView` tanpa version).
+- [x] **Verify**: lead otomatis dari `incident_types.default_lead_org_type` (kecelakaan → Polres, kebakaran → Damkar) bila tidak diberikan; lead eksplisit divalidasi (organisasi aktif) → 400 bila tidak.
+- [x] **Invalidate** menurunkan reputasi pelapor warga (A-021).
+- [x] **Merge** (ERD §7): target wajib ada (404), bukan diri sendiri (400), masih aktif (409); laporan + lampiran dipindah, `report_count` dan `version` target diperbarui; baris dikunci berurutan id (tanpa deadlock).
+- [x] **Resolve**: dispatch aktif → `409 ACTIVE_DISPATCHES_EXIST`; `forceCloseDispatches` menutup lewat transisi sah (A-022).
+- [x] **PATCH**: `typeCode` (divalidasi) dan `location` (`{lat,lng}` → PostGIS `(lng,lat)`); payload event hanya nama field (tanpa nilai lokasi/alamat).
+- [x] **Korban** menambah baris riwayat (sebelumnya menimpa satu baris); responder terkait tanpa kunci, tak terkait → 404.
+- [x] **Akun nonaktif** (S7, §7.2 `auth`): `JwtAuthGuard` menolak token yang masih berlaku milik akun `SUSPENDED`/`DEACTIVATED` → `403 ACCOUNT_DEACTIVATED` (A-023).
+- Perbaikan tambahan: follow-up baru kini memuat `incident` di respons (sebelumnya hanya respons pengulangan → tes konkurensi flaky).
+- Tes: `status-engine.spec.ts` (59 unit: 49 pasangan dari×ke + publicStatus), `jwt-auth.guard.spec.ts` (+4: akun DEACTIVATED/SUSPENDED/hilang, rute publik), `test/incident-lifecycle.e2e-spec.ts` (19 e2e: S6 lock & PATCH bersamaan, kunci kedaluwarsa/renew/unlock/override, version 400/409 + currentVersion, lead otomatis, transisi sah/tidak sah lewat HTTP, ACTIVE_DISPATCHES_EXIST + force, merge pindah laporan/lampiran + kasus galat, riwayat korban, akun nonaktif).
+- Verifikasi 2026-10-30: unit **116/116**, e2e **66/66** (3× berturut-turut), `make lint`, `make contract`, `make verify` V1–V11 hijau.
+- Asumsi: A-021, A-022, A-023. Usulan kontrak: **CC-015** (`lockedBy`/`lockedAt` pada `INCIDENT_LOCKED`).
+- Belum dikerjakan (menunggu CC-011): nama `event_type` tetap pola lama dot-lowercase; tidak ada event baru yang ditambahkan.
+- Status C1: belum — lanjut langkah 4 (view per audiens: serializer bersama, respons mutasi = `DispatcherViewIncident`, `GET /incidents` filter + kursor, `dispatchSummary`/`attentionReasons`).

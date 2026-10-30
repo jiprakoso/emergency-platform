@@ -1,6 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectRedis } from '@nestjs-modules/ioredis';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Redis } from 'ioredis';
 import { AuthedRequest } from './auth.types';
 import { IS_PUBLIC_KEY } from './auth.decorators';
@@ -18,6 +20,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
     @InjectRedis() private readonly redis: Redis,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -43,6 +46,15 @@ export class JwtAuthGuard implements CanActivate {
       const revoked = await this.redis.get(`session:revoked:${payload.sid}`);
       if (revoked) {
         throw AppError.unauthenticated('Sesi sudah dicabut.');
+      }
+      // Akun nonaktif/ditangguhkan langsung ditolak meski access token belum kedaluwarsa
+      // (syarat selesai §7.2 `auth`, S7). Pencarian PK, tanpa cache agar berlaku seketika.
+      const [account] = await this.dataSource.query<Array<{ status: string }>>(
+        'SELECT status FROM users WHERE id = $1',
+        [payload.sub],
+      );
+      if (!account || account.status !== 'ACTIVE') {
+        throw new AppError('ACCOUNT_DEACTIVATED', 'Akun tidak aktif.');
       }
       req.user = {
         userId: payload.sub,

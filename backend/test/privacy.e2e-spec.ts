@@ -214,6 +214,7 @@ describe('Privasi & akses (S7) + audit', () => {
         .send({ code: 'SCENE_RELEASED' });
       expectErrorEnvelope(denied, 'NOT_LEAD_ORGANIZATION', 403);
 
+      expect((await http.post(`/api/v1/incidents/${incidentId}/lock`).set(auth(dispatcher)).send({})).status).toBe(200);
       const lead = await http
         .put(`/api/v1/incidents/${incidentId}/lead`)
         .set(auth(dispatcher))
@@ -262,7 +263,7 @@ describe('Privasi & akses (S7) + audit', () => {
       const res = await http
         .post(`/api/v1/incidents/${id}/invalidate`)
         .set(auth(dispatcher))
-        .send({ reason: 'Laporan iseng' });
+        .send({ version: 1, reason: 'Laporan iseng' });
       expect(res.status).toBe(200);
       const rows = await auditRows('incident.invalidate', id);
       expect(rows).toHaveLength(1);
@@ -278,7 +279,7 @@ describe('Privasi & akses (S7) + audit', () => {
       const res = await http
         .post(`/api/v1/incidents/${source}/merge`)
         .set(auth(dispatcher))
-        .send({ targetIncidentId: target });
+        .send({ version: 1, targetIncidentId: target });
       expect(res.status).toBe(200);
       const rows = await auditRows('incident.merge', source);
       expect(rows).toHaveLength(1);

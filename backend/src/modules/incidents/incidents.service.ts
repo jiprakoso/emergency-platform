@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Incident } from '../../database/entities/incident.entity';
 import { IncidentEvent } from '../../database/entities/incident-event.entity';
 import { OutboxEvent } from '../../database/entities/outbox-event.entity';
@@ -13,8 +13,10 @@ import { randomUUID } from 'node:crypto';
 import { IncidentReport } from '../../database/entities/incident-report.entity';
 import { IncidentCasualty } from '../../database/entities/incident-casualty.entity';
 import { resolvePublicStatus } from './resolve-public-status';
+import { assertTransition } from './status-engine';
 import { AuditContext, AuditService } from '../audit/audit.service';
 import type { EventVisibility } from '../../database/entities/incident-event.entity';
+import type { IncidentStatus } from '../../database/entities/incident.entity';
 import type {
   CasualtyBody,
   CloseBody,
@@ -30,6 +32,23 @@ import type {
 } from './dto/incidents.dto';
 
 const NOTE_VISIBILITIES: readonly EventVisibility[] = ['INTERNAL', 'LEAD', 'UNITS'];
+/** Incident tujuan merge harus masih aktif. */
+const MERGE_TARGET_STATUSES: readonly IncidentStatus[] = ['SUBMITTED', 'VERIFIED', 'IN_PROGRESS'];
+/** Lead dapat diubah selama incident belum selesai/ditutup. */
+const LEAD_EDITABLE_STATUSES: readonly IncidentStatus[] = ['SUBMITTED', 'VERIFIED', 'IN_PROGRESS'];
+/** Dispatch yang belum final (REST §6.2/§6.3). */
+const ACTIVE_DISPATCH_STATUSES = ['OFFERED', 'ACCEPTED', 'EN_ROUTE', 'ON_SCENE', 'NOTIFIED', 'READY', 'FULL', 'PATIENT_ARRIVED'];
+/** A-022: status tujuan saat `resolve` dengan `forceCloseDispatches` — hanya transisi sah §6.2/§6.3. */
+const FORCE_CLOSE_TARGET: Record<string, 'CANCELLED' | 'DONE'> = {
+  OFFERED: 'CANCELLED',
+  ACCEPTED: 'CANCELLED',
+  EN_ROUTE: 'CANCELLED',
+  ON_SCENE: 'DONE',
+  NOTIFIED: 'CANCELLED',
+  READY: 'CANCELLED',
+  FULL: 'CANCELLED',
+  PATIENT_ARRIVED: 'DONE',
+};
 
 @Injectable()
 export class IncidentsService {
@@ -181,43 +200,96 @@ export class IncidentsService {
     return 300;
   }
 
-  async lock(id: string, principal: AuthPrincipal | undefined, body?: LockBody, ctx: AuditContext = {}) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const canLock = await this.permissions.hasPermission(userId, 'incident.lock');
-    if (!canLock) throw AppError.forbidden();
+  /** Baca incident untuk diubah dengan `SELECT … FOR UPDATE` (cegah balapan `version`). */
+  private async loadForUpdate(manager: EntityManager, id: string): Promise<Incident> {
+    const inc = await manager.getRepository(Incident).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+    if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+    return inc;
+  }
 
+  /** REST §5.5: aksi dispatcher yang mengubah incident wajib memegang kunci yang masih berlaku. */
+  private assertHoldsLock(inc: Incident, userId: string, now: Date): void {
+    if (inc.lockedBy !== userId || !inc.lockExpiresAt || inc.lockExpiresAt <= now) {
+      throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
+    }
+  }
+
+  /** Optimistic locking: `version` klien harus sama dengan versi saat ini (REST §7: `currentVersion`). */
+  private assertVersion(inc: Incident, version: number): void {
+    if (version !== inc.version) {
+      throw new AppError('VERSION_CONFLICT', 'Data telah diubah pihak lain.', undefined, undefined, {
+        currentVersion: inc.version,
+      });
+    }
+  }
+
+  /** Satu baris `incident_events` + satu `outbox_events` dalam transaksi pemanggil (AGENTS.md #7). */
+  private async recordEvent(
+    manager: EntityManager,
+    incidentId: string,
+    eventType: string,
+    actorUserId: string,
+    now: Date,
+    payload: Record<string, unknown> = {},
+  ): Promise<void> {
+    await manager.getRepository(IncidentEvent).save(
+      manager.getRepository(IncidentEvent).create({
+        incidentId,
+        eventType,
+        actorUserId,
+        visibility: 'INTERNAL',
+        occurredAt: now,
+        recordedAt: now,
+        payload,
+      }),
+    );
+    await manager.getRepository(OutboxEvent).save(
+      manager.getRepository(OutboxEvent).create({ eid: randomUUID(), eventType, incidentId, payload: { incidentId }, createdAt: now }),
+    );
+  }
+
+  /** Organisasi aktif yang ada; selain itu 400 (bukan 500 dari FK). */
+  private async assertActiveOrganization(manager: EntityManager, organizationId: string): Promise<void> {
+    const rows: unknown[] = await manager.query(`SELECT 1 FROM organizations WHERE id = $1 AND is_active`, [organizationId]);
+    if (rows.length === 0) {
+      throw AppError.validation('Organisasi tidak ditemukan atau tidak aktif.', [{ field: 'organizationId', issue: 'invalid' }]);
+    }
+  }
+
+  async lock(id: string, principal: AuthPrincipal, body: LockBody = {}, ctx: AuditContext = {}) {
+    const userId = principal.userId;
     const lockSec = await this.getLockSeconds();
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + lockSec * 1000);
 
-    // Try atomic lock
     const inc = await this.incidents.findOne({ where: { id } });
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
 
-    // If locked by someone else and not expired
     const heldByOther = !!inc.lockedBy && !!inc.lockExpiresAt && inc.lockExpiresAt > now && inc.lockedBy !== userId;
     if (heldByOther) {
       const canOverride = await this.permissions.hasPermission(userId, 'incident.lock_override');
-      if (!body?.force || !canOverride) {
-        throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.', []);
+      if (!body.force || !canOverride) {
+        throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.');
       }
     }
 
+    // Kunci = metadata, bukan data incident: `version` tidak dinaikkan, sehingga
+    // `version` yang dibaca sebelum mengunci tetap berlaku untuk aksi berikutnya.
     await this.dataSource.transaction(async (manager) => {
-      // Ambil-alih (override) melewati syarat pemegang kunci; tetap dijaga `version`.
       const qb = manager
         .createQueryBuilder()
         .update(Incident)
-        .set({ lockedBy: userId, lockedAt: now, lockExpiresAt: expiresAt, version: inc.version + 1, updatedAt: now })
-        .where('id = :id', { id })
-        .andWhere('version = :v', { v: inc.version });
-      if (!heldByOther) {
-        qb.andWhere('(locked_by IS NULL OR lock_expires_at < :now OR locked_by = :userId)', { now, userId });
+        .set({ lockedBy: userId, lockedAt: now, lockExpiresAt: expiresAt })
+        .where('id = :id', { id });
+      if (heldByOther) {
+        // Ambil alih hanya dari pemegang yang terlihat tadi (pemegang berganti → ulangi).
+        qb.andWhere('locked_by = :prev', { prev: inc.lockedBy });
+      } else {
+        qb.andWhere('(locked_by IS NULL OR lock_expires_at <= :now OR locked_by = :userId)', { now, userId });
       }
       const res = await qb.execute();
       if (res.affected === 0) {
-        throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.', []);
+        throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.');
       }
       if (heldByOther) {
         await this.audit.record(
@@ -235,191 +307,180 @@ export class IncidentsService {
       }
     });
 
-    const updated = await this.incidents.findOne({ where: { id } });
-    return {
-      lockedBy: updated?.lockedBy || userId,
-      lockedAt: updated?.lockedAt?.toISOString() || now.toISOString(),
-      expiresAt: updated?.lockExpiresAt?.toISOString() || expiresAt.toISOString(),
-    };
+    return { lockedBy: userId, lockedAt: now.toISOString(), expiresAt: expiresAt.toISOString() };
   }
 
-  async unlock(id: string, principal: AuthPrincipal | undefined) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
+  async unlock(id: string, principal: AuthPrincipal, ctx: AuditContext = {}) {
+    const userId = principal.userId;
+    const now = this.clock.now();
     const inc = await this.incidents.findOne({ where: { id } });
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-    if (inc.lockedBy && inc.lockedBy !== userId) {
-      const canOverride = await this.permissions.hasPermission(userId, 'incident.lock_override');
-      if (!canOverride) throw AppError.forbidden();
+    // Tidak terkunci / sudah kedaluwarsa: idempoten.
+    if (!inc.lockedBy || !inc.lockExpiresAt || inc.lockExpiresAt <= now) return;
+
+    const releasingOther = inc.lockedBy !== userId;
+    if (releasingOther && !(await this.permissions.hasPermission(userId, 'incident.lock_override'))) {
+      throw AppError.forbidden('Kunci dipegang pengguna lain.');
     }
-    inc.lockedBy = null;
-    inc.lockedAt = null;
-    inc.lockExpiresAt = null;
-    inc.version += 1;
-    inc.updatedAt = this.clock.now();
-    await this.incidents.save(inc);
-    return;
+    await this.dataSource.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .update(Incident)
+        .set({ lockedBy: null, lockedAt: null, lockExpiresAt: null })
+        .where('id = :id AND locked_by = :holder', { id, holder: inc.lockedBy })
+        .execute();
+      if (releasingOther) {
+        await this.audit.record(
+          { actorUserId: userId, action: 'incident.lock_override', entityType: 'incident', entityId: id, before: { lockedBy: inc.lockedBy }, after: { lockedBy: null } },
+          ctx,
+          manager,
+        );
+      }
+    });
   }
 
-  async renewLock(id: string, principal: AuthPrincipal | undefined) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
+  async renewLock(id: string, principal: AuthPrincipal) {
+    const userId = principal.userId;
     const lockSec = await this.getLockSeconds();
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + lockSec * 1000);
 
-    const inc = await this.incidents.findOne({ where: { id } });
-    if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-    if (inc.lockedBy !== userId) {
-      throw new AppError('LOCK_REQUIRED', 'Anda harus memegang kunci untuk memperpanjang.', []);
+    // Atomik: hanya pemegang yang kuncinya belum kedaluwarsa (kunci lewat waktu harus diambil ulang).
+    const res: unknown = await this.dataSource.query(
+      `UPDATE incidents SET lock_expires_at = $4
+        WHERE id = $1 AND locked_by = $2 AND lock_expires_at > $3
+        RETURNING locked_at`,
+      [id, userId, now, expiresAt],
+    );
+    // Driver pg + UPDATE … RETURNING: TypeORM mengembalikan [baris, jumlah].
+    const rows = (Array.isArray(res) && Array.isArray(res[0]) ? res[0] : []) as Array<{ locked_at: Date }>;
+    if (rows.length === 0) {
+      if (!(await this.incidents.exist({ where: { id } }))) throw AppError.notFound('Insiden tidak ditemukan.');
+      throw new AppError('LOCK_REQUIRED', 'Anda harus memegang kunci untuk memperpanjang.');
     }
-    inc.lockExpiresAt = expiresAt;
-    inc.version += 1;
-    inc.updatedAt = now;
-    await this.incidents.save(inc);
-    return {
-      lockedBy: inc.lockedBy,
-      lockedAt: inc.lockedAt?.toISOString() || now.toISOString(),
-      expiresAt: inc.lockExpiresAt.toISOString(),
-    };
+    return { lockedBy: userId, lockedAt: new Date(rows[0].locked_at).toISOString(), expiresAt: expiresAt.toISOString() };
   }
 
-  async verify(id: string, principal: AuthPrincipal | undefined, body?: VerifyBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const canVerify = await this.permissions.hasPermission(userId, 'incident.verify');
-    if (!canVerify) throw AppError.forbidden();
-
+  async verify(id: string, principal: AuthPrincipal, body: VerifyBody) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      this.assertHoldsLock(inc, userId, now);
+      this.assertVersion(inc, body.version);
+      assertTransition(inc.status, 'VERIFIED');
 
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.status !== 'SUBMITTED') throw new AppError('INVALID_STATUS_TRANSITION', 'Transisi status tidak diizinkan.');
-      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
-      if (body?.version !== undefined && body.version !== inc.version) {
-        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
+      // Lead: dari body, atau otomatis dari `incident_types.default_lead_org_type` (REST §5.5).
+      let leadOrganizationId = body.leadOrganizationId ?? null;
+      if (leadOrganizationId) {
+        await this.assertActiveOrganization(manager, leadOrganizationId);
+      } else if (!inc.leadOrganizationId) {
+        const rows: Array<{ id: string }> = await manager.query(
+          `SELECT o.id FROM incident_types t
+             JOIN organizations o ON o.type = t.default_lead_org_type AND o.is_active
+            WHERE t.id = $1
+            ORDER BY o.created_at, o.id
+            LIMIT 1`,
+          [inc.typeId],
+        );
+        leadOrganizationId = rows[0]?.id ?? null;
       }
 
       inc.status = 'VERIFIED';
       inc.verifiedBy = userId;
       inc.verifiedAt = now;
-      if (body?.severity) inc.severity = body.severity;
-      if (body?.leadOrganizationId !== undefined) inc.leadOrganizationId = body.leadOrganizationId;
-      if (body?.summary !== undefined) inc.summary = body.summary;
+      inc.severity = body.severity;
+      if (leadOrganizationId && leadOrganizationId !== inc.leadOrganizationId) {
+        inc.leadOrganizationId = leadOrganizationId;
+        inc.leadSetAt = now;
+      }
+      if (body.summary !== undefined) inc.summary = body.summary;
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-
-      await evRepo.save(
-        evRepo.create({
-          incidentId: inc.id,
-          eventType: 'incident.verified',
-          actorUserId: userId,
-          visibility: 'INTERNAL',
-          occurredAt: now,
-          recordedAt: now,
-          payload: {},
-        }),
-      );
-      await outRepo.save(
-        outRepo.create({
-          eid: randomUUID(),
-          eventType: 'incident.verified',
-          incidentId: inc.id,
-          payload: { incidentId: inc.id },
-          createdAt: now,
-        }),
-      );
+      await manager.getRepository(Incident).save(inc);
+      await this.recordEvent(manager, inc.id, 'incident.verified', userId, now, { severity: inc.severity, leadOrganizationId: inc.leadOrganizationId });
       return inc;
     });
-    return result;
   }
 
-  async invalidate(id: string, principal: AuthPrincipal | undefined, body?: InvalidateBody, ctx: AuditContext = {}) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'incident.invalidate');
-    if (!can) throw AppError.forbidden();
-
+  async invalidate(id: string, principal: AuthPrincipal, body: InvalidateBody, ctx: AuditContext = {}) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.status !== 'SUBMITTED') throw new AppError('INVALID_STATUS_TRANSITION', 'Transisi status tidak diizinkan.');
-      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
-      if (body?.version !== undefined && body.version !== inc.version) {
-        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
-      }
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      this.assertHoldsLock(inc, userId, now);
+      this.assertVersion(inc, body.version);
+      assertTransition(inc.status, 'INVALID');
 
       const before = { status: inc.status };
       inc.status = 'INVALID';
-      inc.invalidReason = body?.reason || null;
+      inc.invalidReason = body.reason;
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-
-      await evRepo.save(
-        evRepo.create({
-          incidentId: inc.id,
-          eventType: 'incident.invalidated',
-          actorUserId: userId,
-          visibility: 'INTERNAL',
-          occurredAt: now,
-          recordedAt: now,
-          payload: { reason: body?.reason },
-        }),
+      await manager.getRepository(Incident).save(inc);
+      // REST §5.5: menurunkan reputationScore pelapor (A-021: -1 per pelapor warga berbeda).
+      await manager.query(
+        `UPDATE users SET reputation_score = GREATEST(reputation_score - 1, -32768), updated_at = $2
+          WHERE id IN (SELECT DISTINCT reporter_id FROM incident_reports WHERE incident_id = $1 AND reporter_id IS NOT NULL)
+            AND user_type = 'CITIZEN'`,
+        [inc.id, now],
       );
+      await this.recordEvent(manager, inc.id, 'incident.invalidated', userId, now, { reason: body.reason });
       await this.audit.record(
         { actorUserId: userId, action: 'incident.invalidate', entityType: 'incident', entityId: inc.id, before, after: { status: inc.status } },
         ctx,
         manager,
       );
-      await outRepo.save(
-        outRepo.create({
-          eid: randomUUID(),
-          eventType: 'incident.invalidated',
-          incidentId: inc.id,
-          payload: { incidentId: inc.id },
-          createdAt: now,
-        }),
-      );
       return inc;
     });
-    return result;
   }
 
-  async merge(id: string, principal: AuthPrincipal | undefined, body?: MergeBody, ctx: AuditContext = {}) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'incident.merge');
-    if (!can) throw AppError.forbidden();
+  async merge(id: string, principal: AuthPrincipal, body: MergeBody, ctx: AuditContext = {}) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
-      if (body?.version !== undefined && body.version !== inc.version) {
-        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
+    if (body.targetIncidentId === id) {
+      throw AppError.validation('Insiden tidak dapat digabung ke dirinya sendiri.', [{ field: 'targetIncidentId', issue: 'invalid' }]);
+    }
+    return this.dataSource.transaction(async (manager) => {
+      // Kunci baris berurutan id agar dua merge silang tidak deadlock.
+      const [first, second] = [id, body.targetIncidentId].sort();
+      const locked = new Map<string, Incident>();
+      for (const key of [first, second]) {
+        const row = await manager.getRepository(Incident).findOne({ where: { id: key }, lock: { mode: 'pessimistic_write' } });
+        if (row) locked.set(key, row);
       }
+      const inc = locked.get(id);
+      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+      const target = locked.get(body.targetIncidentId);
+      if (!target) throw AppError.notFound('Insiden tujuan tidak ditemukan.');
+
+      this.assertHoldsLock(inc, userId, now);
+      this.assertVersion(inc, body.version);
+      assertTransition(inc.status, 'DUPLICATE');
+      if (!MERGE_TARGET_STATUSES.includes(target.status)) {
+        throw AppError.conflict('Insiden tujuan tidak aktif.', 'INVALID_STATUS_TRANSITION');
+      }
+
+      // ERD §7: semua laporan (dan lampirannya) pindah ke incident tujuan.
+      const moved: unknown = await manager.query(
+        `UPDATE incident_reports SET incident_id = $2, updated_at = $3 WHERE incident_id = $1 RETURNING id`,
+        [inc.id, target.id, now],
+      );
+      const movedCount = Array.isArray(moved) && Array.isArray(moved[0]) ? (moved[0] as unknown[]).length : 0;
+      await manager.query(`UPDATE attachments SET incident_id = $2 WHERE incident_id = $1`, [inc.id, target.id]);
+
       const before = { status: inc.status, duplicateOfId: inc.duplicateOfId };
       inc.status = 'DUPLICATE';
-      inc.duplicateOfId = body?.targetIncidentId || null;
+      inc.duplicateOfId = target.id;
+      inc.reportCount = 0;
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-      await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.duplicated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { targetIncidentId: body?.targetIncidentId, reason: body?.reason } }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.duplicated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      target.reportCount += movedCount;
+      target.version += 1;
+      target.updatedAt = now;
+      await manager.getRepository(Incident).save([inc, target]);
+
+      await this.recordEvent(manager, inc.id, 'incident.duplicated', userId, now, { targetIncidentId: target.id, movedReports: movedCount });
       await this.audit.record(
         { actorUserId: userId, action: 'incident.merge', entityType: 'incident', entityId: inc.id, before, after: { status: inc.status, duplicateOfId: inc.duplicateOfId } },
         ctx,
@@ -427,30 +488,26 @@ export class IncidentsService {
       );
       return inc;
     });
-    return result;
   }
 
-  async setLead(id: string, principal: AuthPrincipal | undefined, body?: LeadBody, ctx: AuditContext = {}) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'incident.set_lead');
-    if (!can) throw AppError.forbidden();
+  async setLead(id: string, principal: AuthPrincipal, body: LeadBody, ctx: AuditContext = {}) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (body?.organizationId === undefined) throw new AppError('VALIDATION_FAILED', 'organizationId wajib diisi.');
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      this.assertHoldsLock(inc, userId, now);
+      if (!LEAD_EDITABLE_STATUSES.includes(inc.status)) {
+        throw AppError.conflict('Pemegang komando tidak dapat diubah pada status ini.', 'INVALID_STATUS_TRANSITION');
+      }
+      await this.assertActiveOrganization(manager, body.organizationId);
+
       const before = { leadOrganizationId: inc.leadOrganizationId };
       inc.leadOrganizationId = body.organizationId;
       inc.leadSetAt = now;
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-      await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.lead_set', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { organizationId: body.organizationId, reason: body?.reason } }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.lead_set', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await manager.getRepository(Incident).save(inc);
+      await this.recordEvent(manager, inc.id, 'incident.lead_set', userId, now, { organizationId: body.organizationId, reason: body.reason });
       await this.audit.record(
         { actorUserId: userId, action: 'incident.set_lead', entityType: 'incident', entityId: inc.id, before, after: { leadOrganizationId: inc.leadOrganizationId } },
         ctx,
@@ -458,63 +515,63 @@ export class IncidentsService {
       );
       return inc;
     });
-    return result;
   }
 
-  async resolve(id: string, principal: AuthPrincipal | undefined, body?: ResolveBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'incident.close');
-    if (!can) throw AppError.forbidden();
+  async resolve(id: string, principal: AuthPrincipal, body: ResolveBody) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.status !== 'IN_PROGRESS' && inc.status !== 'VERIFIED') throw new AppError('INVALID_STATUS_TRANSITION', 'Transisi status tidak diizinkan.');
-      if (body?.version !== undefined && body.version !== inc.version) {
-        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      this.assertHoldsLock(inc, userId, now);
+      this.assertVersion(inc, body.version);
+      assertTransition(inc.status, 'RESOLVED');
+
+      const active: Array<{ id: string; status: string }> = await manager.query(
+        `SELECT id, status FROM dispatches WHERE incident_id = $1 AND status = ANY($2::text[]) FOR UPDATE`,
+        [inc.id, ACTIVE_DISPATCH_STATUSES],
+      );
+      if (active.length > 0 && !body.forceCloseDispatches) {
+        throw AppError.conflict('Masih ada dispatch aktif.', 'ACTIVE_DISPATCHES_EXIST');
       }
+      // A-022: tutup paksa lewat transisi sah §6.2/§6.3 — CANCELLED bila tersedia, selain itu DONE.
+      for (const d of active) {
+        const toStatus = FORCE_CLOSE_TARGET[d.status];
+        await manager.query(
+          `UPDATE dispatches SET status = $2::varchar,
+                  cancel_reason = CASE WHEN $2::varchar = 'CANCELLED' THEN 'Incident diselesaikan dispatcher' ELSE cancel_reason END,
+                  done_at = CASE WHEN $2::varchar = 'DONE' THEN $3::timestamptz ELSE done_at END,
+                  version = version + 1, updated_at = $3::timestamptz
+            WHERE id = $1`,
+          [d.id, toStatus, now],
+        );
+      }
+
       inc.status = 'RESOLVED';
       inc.resolvedAt = now;
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-      await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.resolved', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { note: body?.note } }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.resolved', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await manager.getRepository(Incident).save(inc);
+      await this.recordEvent(manager, inc.id, 'incident.resolved', userId, now, { note: body.note, closedDispatches: active.length });
       return inc;
     });
-    return result;
   }
 
-  async close(id: string, principal: AuthPrincipal | undefined, body?: CloseBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'incident.close');
-    if (!can) throw AppError.forbidden();
+  async close(id: string, principal: AuthPrincipal, body: CloseBody) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.status !== 'RESOLVED') throw new AppError('INVALID_STATUS_TRANSITION', 'Transisi status tidak diizinkan.');
-      if (body?.version !== undefined && body.version !== inc.version) {
-        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
-      }
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      this.assertHoldsLock(inc, userId, now);
+      this.assertVersion(inc, body.version);
+      assertTransition(inc.status, 'CLOSED');
       inc.status = 'CLOSED';
       inc.closedAt = now;
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-      await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.closed', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { note: body?.note } }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.closed', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await manager.getRepository(Incident).save(inc);
+      await this.recordEvent(manager, inc.id, 'incident.closed', userId, now, { note: body.note });
       return inc;
     });
-    return result;
   }
 
   async nearby(id: string, radiusM = 300, hours = 6) {
@@ -544,34 +601,43 @@ export class IncidentsService {
     }
   }
 
-  async patch(id: string, principal: AuthPrincipal | undefined, body?: PatchBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'incident.update');
-    if (!can) throw AppError.forbidden();
+  async patch(id: string, principal: AuthPrincipal, body: PatchBody) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
-      if (body?.version !== undefined && body.version !== inc.version) {
-        throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      this.assertHoldsLock(inc, userId, now);
+      this.assertVersion(inc, body.version);
+      if (!LEAD_EDITABLE_STATUSES.includes(inc.status)) {
+        throw AppError.conflict('Insiden yang sudah selesai tidak dapat diubah.', 'INVALID_STATUS_TRANSITION');
       }
-      if (body?.severity !== undefined) inc.severity = body.severity;
-      if (body?.escalationLevel !== undefined) inc.escalationLevel = body.escalationLevel;
-      if (body?.summary !== undefined) inc.summary = body.summary;
-      if (body?.addressText !== undefined) inc.addressText = body.addressText;
+
+      const changed: string[] = [];
+      if (body.typeCode !== undefined) {
+        const rows: Array<{ id: string }> = await manager.query(`SELECT id FROM incident_types WHERE code = $1 AND is_active`, [body.typeCode]);
+        if (!rows[0]) throw AppError.validation('Tipe kejadian tidak valid.', [{ field: 'typeCode', issue: 'invalid' }]);
+        inc.typeId = rows[0].id;
+        changed.push('typeCode');
+      }
+      if (body.severity !== undefined) (inc.severity = body.severity), changed.push('severity');
+      if (body.escalationLevel !== undefined) (inc.escalationLevel = body.escalationLevel), changed.push('escalationLevel');
+      if (body.summary !== undefined) (inc.summary = body.summary), changed.push('summary');
+      if (body.addressText !== undefined) (inc.addressText = body.addressText), changed.push('addressText');
       inc.version += 1;
       inc.updatedAt = now;
-      await incRepo.save(inc);
-      await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.updated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await manager.getRepository(Incident).save(inc);
+      if (body.location) {
+        // Koordinat API {lat,lng} → PostGIS (lng,lat); hanya di lapisan data (AGENTS.md konvensi).
+        await manager.query(
+          `UPDATE incidents SET location = ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, location_accuracy_m = $4 WHERE id = $1`,
+          [inc.id, body.location.lng, body.location.lat, body.location.accuracyM ?? null],
+        );
+        changed.push('location');
+      }
+      // Payload event hanya nama field (nilai seperti lokasi/alamat tidak disalin ke log event).
+      await this.recordEvent(manager, inc.id, 'incident.updated', userId, now, { fields: changed });
       return inc;
     });
-    return result;
   }
 
   async getEvents(id: string, principal?: AuthPrincipal) {
@@ -641,49 +707,51 @@ export class IncidentsService {
     return result;
   }
 
-  async addCasualty(id: string, principal: AuthPrincipal | undefined, body?: CasualtyBody) {
-    const userId = principal?.userId;
-    if (!userId) throw AppError.unauthenticated();
-    const can = await this.permissions.hasPermission(userId, 'casualty.update');
-    if (!can) throw AppError.forbidden();
+  /**
+   * REST §5.5: setiap pembaruan menambah baris riwayat `incident_casualties`.
+   * Dispatcher wajib memegang kunci; responder tanpa kunci tetapi harus terkait incident.
+   */
+  async addCasualty(id: string, principal: AuthPrincipal, body: CasualtyBody) {
+    const userId = principal.userId;
     const now = this.clock.now();
-    const result = await this.incidents.manager.transaction(async (manager) => {
-      const incRepo = manager.getRepository(Incident);
-      const evRepo = manager.getRepository(IncidentEvent);
+    const isDispatcher = await this.permissions.hasPermission(userId, 'incident.read_all');
+    return this.dataSource.transaction(async (manager) => {
+      const inc = await this.loadForUpdate(manager, id);
+      if (isDispatcher) {
+        this.assertHoldsLock(inc, userId, now);
+      } else if (!(await this.relationOf(inc, principal)).related) {
+        throw AppError.notFound('Insiden tidak ditemukan.');
+      }
       const casRepo = manager.getRepository(IncidentCasualty);
-      const outRepo = manager.getRepository(OutboxEvent);
-      const inc = await incRepo.findOne({ where: { id } });
-      if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
-      if (inc.lockedBy !== userId) throw new AppError('LOCK_REQUIRED', 'Insiden harus dikunci oleh Anda untuk tindakan ini.');
-       // Create or update casualty record
-      let casualty = await casRepo.findOne({ where: { incidentId: id } });
-      if (!casualty) {
-        casualty = casRepo.create({
+      const casualty = await casRepo.save(
+        casRepo.create({
           incidentId: id,
-          injuredCount: body?.injured || 0,
-          deceasedCount: body?.deceased || 0,
-          criticalCount: body?.critical || null,
-          missingCount: body?.missing || null,
-          note: body?.note || null,
+          injuredCount: body.injured,
+          deceasedCount: body.deceased,
+          criticalCount: body.critical ?? null,
+          missingCount: body.missing ?? null,
+          note: body.note ?? null,
           reportedBy: userId,
           reportedAt: now,
           createdAt: now,
-        });
-      } else {
-        casualty.injuredCount = body?.injured || 0;
-        casualty.deceasedCount = body?.deceased || 0;
-        casualty.criticalCount = body?.critical || null;
-        casualty.missingCount = body?.missing || null;
-        casualty.note = body?.note || null;
-        casualty.reportedBy = userId;
-        casualty.reportedAt = now;
-      }
-      await casRepo.save(casualty);
-      await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.casualties_updated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: body || {} }));
-      await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.casualties_updated', incidentId: id, payload: body || {}, createdAt: now }));
-      return { id: casualty.id, injured: casualty.injuredCount, deceased: casualty.deceasedCount, critical: casualty.criticalCount, missing: casualty.missingCount, note: casualty.note, reportedAt: casualty.reportedAt?.toISOString() };
+        }),
+      );
+      await this.recordEvent(manager, id, 'incident.casualties_updated', userId, now, {
+        injured: body.injured,
+        deceased: body.deceased,
+        critical: body.critical ?? null,
+        missing: body.missing ?? null,
+      });
+      return {
+        id: casualty.id,
+        injured: casualty.injuredCount,
+        deceased: casualty.deceasedCount,
+        critical: casualty.criticalCount,
+        missing: casualty.missingCount,
+        note: casualty.note,
+        reportedAt: casualty.reportedAt.toISOString(),
+      };
     });
-    return result;
   }
 
   async addMilestone(id: string, principal: AuthPrincipal | undefined, body?: MilestoneBody) {

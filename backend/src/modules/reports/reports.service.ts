@@ -356,7 +356,7 @@ export class ReportsService {
           [reportId, incidentId, report.typeId, userId, body.clientReportId, body.location?.lng ?? null, body.location?.lat ?? null, body.description, body.victimHint ?? null, now, report.id],
         );
         await this.linkAttachments(manager, body.attachmentIds, userId, reportId, incidentId);
-        return { report: (await reportRepo.findOne({ where: { id: reportId } }))!, created: true };
+        return { report: (await reportRepo.findOne({ where: { id: reportId }, relations: ['incident'] }))!, created: true };
       });
       return result.created ? this.buildCitizenView(result.report) : replayFollowUp(result.report);
     } catch (e) {

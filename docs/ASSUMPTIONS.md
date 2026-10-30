@@ -125,3 +125,17 @@ dihapus setelah suite selesai.
 - Konteks: REST §8 — `POST /reports` HELP_REQUEST 3 per 10 menit + 10 per hari, CONDITION_REPORT 10 per 10 menit; "pengguna dengan skor reputasi rendah dibatasi lebih ketat" tanpa angka.
 - Asumsi: angka dibaca dari `system_settings.report_rate_limit` (seed §8) dengan aturan bawaan `RateLimitRules` sebagai cadangan. Pengetatan berdasarkan `reputationScore` **belum** diterapkan sampai angkanya ditetapkan. Jatah diambil hanya untuk laporan baru (setelah kunci advisory + cek duplikat); pengulangan `clientReportId` dan permintaan yang gagal tidak dihitung (jatah dikembalikan).
 - Dampak bila salah: penyetelan angka cukup lewat pengaturan; aturan reputasi ditambahkan di `ReportsService.reportRules` tanpa mengubah pemanggil.
+
+## A-021: Penurunan reputasi saat `invalidate`
+- Konteks: REST §5.5 — `POST /incidents/{id}/invalidate` "menurunkan `reputationScore` pelapor", tanpa besaran.
+- Asumsi: −1 per pelapor warga berbeda (`user_type = CITIZEN`) yang laporannya tertaut ke incident tersebut, di transaksi yang sama. Laporan input manual (tanpa akun) tidak berdampak.
+- Dampak bila salah: ubah besaran di `IncidentsService.invalidate`; belum ada aturan yang membaca skor (pengetatan batas laju A-020 menunggu angka).
+
+## A-022: `resolve` dengan `forceCloseDispatches`
+- Konteks: REST §5.5 — `resolve` menolak dengan `409 ACTIVE_DISPATCHES_EXIST` bila masih ada dispatch aktif, kecuali `forceCloseDispatches = true`; cara menutupnya tidak dirinci.
+- Asumsi: dispatch aktif ditutup hanya lewat transisi sah §6.2/§6.3 — `OFFERED/ACCEPTED/EN_ROUTE/NOTIFIED/READY/FULL → CANCELLED` (`cancel_reason` "Incident diselesaikan dispatcher"), `ON_SCENE/PATIENT_ARRIVED → DONE` (tidak ada jalur CANCELLED). Event/notifikasi per dispatch menyusul bersama modul dispatch (Fase 3).
+- Dampak bila salah: pemetaan ada di satu konstanta `FORCE_CLOSE_TARGET`.
+
+## A-023: Pemeriksaan status akun di setiap permintaan
+- Konteks: syarat selesai §7.2 `auth` ("akun nonaktif langsung ditolak") dan S7.
+- Asumsi: `JwtAuthGuard` membaca `users.status` (pencarian PK) di setiap permintaan terautentikasi, tanpa cache, agar berlaku seketika; akun `SUSPENDED`/`DEACTIVATED` → `403 ACCOUNT_DEACTIVATED` (kode yang sama dengan login). Untuk skala pilot dapat diganti penanda Redis yang ditulis saat penonaktifan (Fase 5) tanpa mengubah perilaku.

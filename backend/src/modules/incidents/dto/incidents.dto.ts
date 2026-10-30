@@ -1,84 +1,209 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { PageQueryDto } from '../../../common/pagination/page-query.dto';
 import { DEFAULT_LIMIT, MAX_LIMIT } from '../../../common/pagination/cursor';
-import type { EventVisibility } from '../../../database/entities/incident-event.entity';
 import type { IncidentSeverity } from '../../../database/entities/incident.entity';
 
 /**
- * Tipe badan untuk endpoint insiden.
- * Sengaja type alias (bukan interface) agar dapat ditugaskan ke `Record<string, unknown>`
- * saat ditulis ke `incident_events.payload` / `outbox_events.payload`.
- * Hanya mengetik badan yang memang dibaca kode saat ini — tanpa validator,
- * sehingga perilaku masuk tidak berubah.
+ * Badan endpoint insiden, divalidasi ValidationPipe sesuai skema `openapi.yaml`
+ * (field wajib = `required` kontrak, mis. `version` pada aksi yang mengubah incident).
  */
 
-export type LockBody = {
+const SEVERITIES: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'MASS'];
+const NOTE_VISIBILITIES = ['INTERNAL', 'LEAD', 'UNITS'] as const;
+const MILESTONE_CODES = [
+  'SCENE_RELEASED',
+  'ROAD_REOPENED',
+  'VICTIM_DECEASED_HANDLED',
+  'EXTERNAL_UNIT_ARRIVED',
+  'EXTERNAL_COORDINATION',
+] as const;
+
+class CoordinatesBody {
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat!: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  accuracyM?: number;
+}
+
+/** `version` wajib untuk optimistic locking (REST §5.5). */
+class VersionedBody {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class LockBody {
+  @IsOptional()
+  @IsBoolean()
   force?: boolean;
-};
+}
 
-export type VerifyBody = {
-  version?: number;
-  severity?: IncidentSeverity;
-  leadOrganizationId?: string;
+export class VerifyBody extends VersionedBody {
+  @IsIn(SEVERITIES)
+  severity!: IncidentSeverity;
+
+  @IsOptional()
+  @IsUUID()
+  leadOrganizationId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   summary?: string;
-};
+}
 
-export type InvalidateBody = {
-  version?: number;
+export class InvalidateBody extends VersionedBody {
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+}
+
+export class MergeBody extends VersionedBody {
+  @IsUUID()
+  targetIncidentId!: string;
+
+  @IsOptional()
+  @IsString()
   reason?: string;
-};
+}
 
-export type MergeBody = {
-  version?: number;
-  targetIncidentId?: string;
-  reason?: string;
-};
+export class LeadBody {
+  @IsUUID()
+  organizationId!: string;
 
-export type LeadBody = {
-  organizationId?: string;
-  version?: number;
-  reason?: string;
-};
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+}
 
-export type ResolveBody = {
-  version?: number;
+export class ResolveBody extends VersionedBody {
+  @IsOptional()
+  @IsString()
   note?: string;
-  forceCloseDispatches?: true;
-};
 
-export type CloseBody = {
-  version?: number;
+  @IsOptional()
+  @IsBoolean()
+  forceCloseDispatches?: boolean;
+}
+
+export class CloseBody extends VersionedBody {
+  @IsOptional()
+  @IsString()
   note?: string;
-};
+}
 
-export type PatchBody = {
-  version?: number;
+export class PatchBody extends VersionedBody {
+  @IsOptional()
+  @IsString()
+  typeCode?: string;
+
+  @IsOptional()
+  @IsIn(SEVERITIES)
   severity?: IncidentSeverity;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   escalationLevel?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   summary?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CoordinatesBody)
+  location?: CoordinatesBody;
+
+  @IsOptional()
+  @IsString()
   addressText?: string;
-};
+}
 
-export type NoteBody = {
-  text?: string;
-  visibility?: EventVisibility;
-};
+export class NoteBody {
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
 
-export type CasualtyBody = {
-  injured?: number;
-  deceased?: number;
-  critical?: number | null;
-  missing?: number | null;
+  @IsIn(NOTE_VISIBILITIES)
+  visibility!: (typeof NOTE_VISIBILITIES)[number];
+}
+
+export class CasualtyBody {
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  injured!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  deceased!: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  critical?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  missing?: number;
+
+  @IsOptional()
+  @IsString()
   note?: string;
-};
+}
 
-export type MilestoneBody = {
-  code?: string;
+export class MilestoneBody {
+  @IsIn(MILESTONE_CODES)
+  code!: (typeof MILESTONE_CODES)[number];
+
+  @IsOptional()
+  @IsString()
   note?: string;
-  occurredAt?: string;
+
+  @IsOptional()
+  @IsObject()
   payload?: Record<string, unknown>;
-};
+
+  @IsOptional()
+  @IsDateString()
+  occurredAt?: string;
+}
 
 /** Query `GET /incidents` (kontrak: filter + sort + limit/cursor). */
 export class IncidentsQueryDto {

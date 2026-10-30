@@ -199,7 +199,8 @@ describe('Laporan: idempotensi (S5), batas laju, lampiran', () => {
       const res = await Promise.all([1, 2, 3].map(() => http.post(path).set(auth(token)).send(followBody)));
       expect(res.map((r) => r.status)).toEqual([201, 201, 201]);
       expect(new Set(res.map((r) => r.body.data.id)).size).toBe(1);
-      expect(res[0].body.data.incident.id).toBe(parent.body.data.incident.id);
+      // Respons baru maupun pengulangan memuat incident yang sama.
+      for (const r of res) expect(r.body.data.incident.id).toBe(parent.body.data.incident.id);
       expect(await rowsFor(followBody.clientReportId)).toEqual({ reports: 1, incidents: 1 });
     });
   });

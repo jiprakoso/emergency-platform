@@ -1,5 +1,6 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TokenService } from './providers/token.service';
@@ -11,7 +12,7 @@ import { FakeRedis, asRedis, catchError, fakeConfig } from '../../testing/fakes'
 const USER_ID = 'user-staf-1';
 const SESSION_ID = 'sesi-1';
 
-function buildGuard(isPublic: boolean) {
+function buildGuard(isPublic: boolean, accountStatus: string | null = 'ACTIVE') {
   const reflector = {
     getAllAndOverride: jest.fn(() => isPublic),
   } as unknown as Reflector;
@@ -27,7 +28,11 @@ function buildGuard(isPublic: boolean) {
     }),
   );
   const redis = new FakeRedis();
-  const guard = new JwtAuthGuard(reflector, tokens, asRedis(redis));
+  // Hanya `SELECT status FROM users` yang dipakai guard; null = pengguna tidak ada.
+  const dataSource = {
+    query: jest.fn(async () => (accountStatus ? [{ status: accountStatus }] : [])),
+  } as unknown as DataSource;
+  const guard = new JwtAuthGuard(reflector, tokens, asRedis(redis), dataSource);
   return { guard, tokens, redis };
 }
 
@@ -81,6 +86,27 @@ describe('JwtAuthGuard', () => {
     expect(err).toBeInstanceOf(AppError);
     expect(err.code).toBe('UNAUTHENTICATED');
     expect((err as AppError).getStatus()).toBe(401);
+  });
+
+  it.each([['DEACTIVATED'], ['SUSPENDED'], [null]])(
+    'menolak access token yang masih berlaku bila akun %s → 403 ACCOUNT_DEACTIVATED',
+    async (status) => {
+      const { guard, tokens } = buildGuard(false, status);
+      const token = tokens.signAccessToken({ sub: USER_ID, sid: SESSION_ID, userType: 'STAFF', roles: ['RESPONDER'] });
+      const { ctx, request } = contextFor(token);
+      const err = await catchError(guard.canActivate(ctx));
+      expect(err.code).toBe('ACCOUNT_DEACTIVATED');
+      expect((err as AppError).getStatus()).toBe(403);
+      expect(request.user).toBeUndefined();
+    },
+  );
+
+  it('rute publik dengan token akun nonaktif tetap terbuka tanpa principal', async () => {
+    const { guard, tokens } = buildGuard(true, 'DEACTIVATED');
+    const token = tokens.signAccessToken({ sub: USER_ID, sid: SESSION_ID, userType: 'CITIZEN', roles: ['CITIZEN'] });
+    const { ctx, request } = contextFor(token);
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(request.user).toBeUndefined();
   });
 
   it('melewati rute publik tanpa token', async () => {
