@@ -7,7 +7,9 @@ import {
   expectErrorEnvelope,
   Http,
   resetLocalRateLimits,
+  resetReportRateLimits,
   staffLogin,
+  userIdOf,
 } from './e2e-utils';
 
 /**
@@ -46,6 +48,7 @@ describe('Privasi & akses (S7) + audit', () => {
   }
 
   async function createReport(token: string) {
+    await resetReportRateLimits(app, userIdOf(token));
     const res = await http
       .post('/api/v1/reports')
       .set(auth(token))
@@ -67,9 +70,6 @@ describe('Privasi & akses (S7) + audit', () => {
       [action, entityId],
     );
   }
-
-  const userIdOf = (token: string) =>
-    JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).sub as string;
 
   beforeAll(async () => {
     ({ app, http } = await createTestApp());

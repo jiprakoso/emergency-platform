@@ -47,6 +47,13 @@ export class RateLimitService {
     }
   }
 
+  /** Kembalikan jatah yang sudah terpakai (mis. permintaan ternyata pengulangan idempoten). */
+  async refund(rule: RateLimitRule, identity: string, cost = 1): Promise<void> {
+    const key = `rl:${rule.scope}:${identity}`;
+    const count = await this.redis.decrby(key, cost);
+    if (count <= 0) await this.redis.del(key);
+  }
+
   /** Reset penghitung (mis. login staf berhasil). */
   async reset(rule: RateLimitRule, identity: string): Promise<void> {
     await this.redis.del(`rl:${rule.scope}:${identity}`);

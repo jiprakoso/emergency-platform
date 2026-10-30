@@ -120,3 +120,8 @@ seluruh Redis. (c) Suite dijalankan satu per satu (`maxWorkers: 1`) agar
 penghitung laju dan sesi tidak saling mengganggu. (d) Efek samping tes
 dibersihkan: 2FA akun `dispatcher2` dinonaktifkan kembali dan warga uji
 dihapus setelah suite selesai.
+
+## A-020: Batas laju laporan dari `system_settings`, tanpa pengetatan reputasi
+- Konteks: REST §8 — `POST /reports` HELP_REQUEST 3 per 10 menit + 10 per hari, CONDITION_REPORT 10 per 10 menit; "pengguna dengan skor reputasi rendah dibatasi lebih ketat" tanpa angka.
+- Asumsi: angka dibaca dari `system_settings.report_rate_limit` (seed §8) dengan aturan bawaan `RateLimitRules` sebagai cadangan. Pengetatan berdasarkan `reputationScore` **belum** diterapkan sampai angkanya ditetapkan. Jatah diambil hanya untuk laporan baru (setelah kunci advisory + cek duplikat); pengulangan `clientReportId` dan permintaan yang gagal tidak dihitung (jatah dikembalikan).
+- Dampak bila salah: penyetelan angka cukup lewat pengaturan; aturan reputasi ditambahkan di `ReportsService.reportRules` tanpa mengubah pemanggil.

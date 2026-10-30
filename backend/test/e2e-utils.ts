@@ -85,3 +85,18 @@ export async function resetLocalRateLimits(app: INestApplication): Promise<void>
   const redis = app.get<Redis>(getRedisConnectionToken());
   await redis.del('rl:otp:ip:127.0.0.1', 'rl:otp:ip:::ffff:127.0.0.1');
 }
+
+/** Bersihkan penghitung laju laporan satu pengguna (REST §8) agar fixture tidak saling membatasi. */
+export async function resetReportRateLimits(app: INestApplication, userId: string): Promise<void> {
+  const redis = app.get<Redis>(getRedisConnectionToken());
+  await redis.del(
+    `rl:reports:help:user:${userId}`,
+    `rl:reports:help:day:user:${userId}`,
+    `rl:reports:cond:user:${userId}`,
+  );
+}
+
+/** Ambil `sub` (id pengguna) dari access token tanpa verifikasi — hanya untuk tes. */
+export function userIdOf(accessToken: string): string {
+  return JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url').toString()).sub as string;
+}

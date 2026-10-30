@@ -212,5 +212,16 @@ Rencana penutupan C1 (urutan): **(1) keamanan/PII + audit + S7** → (2) idempot
 - [x] `AttachmentKind` entitas = `IMAGE|VIDEO|DOCUMENT`; konversi `DOCUMENT→PHOTO` di service dihapus. `POST /attachments/uploads` → 201, `confirm` lampiran belum terkait → 200 (diuji lewat API, fixture DB dihapus).
 - Verifikasi: naik→turun→naik bersih di DB dev; klon bersih (DB baru, 3 migrasi) lulus `privacy.e2e-spec`; unit 53/53, e2e 37/37, `make lint`, `make contract`, `make verify` V1–V11 hijau.
 - Dokumen: ERD `attachments`, CC-008/CC-012/CC-014 → diterapkan, `DECISIONS.md` D-014, Q-008 answered.
-- Catatan tersisa (langkah 5): `ownerId` di `POST /attachments/uploads` belum dipakai untuk menautkan; `attachmentIds` di `POST /reports` menautkan lampiran tanpa cek pemilik/status; URL unggah masih palsu (bukan presigned MinIO); job pembersih lampiran yatim belum ada.
-- Status C1: belum — lanjut langkah 2 (S5).
+- Catatan tersisa (langkah 5): `ownerId` di `POST /attachments/uploads` belum dipakai untuk menautkan; ~~`attachmentIds` tanpa cek pemilik~~ (ditutup di langkah 2); URL unggah masih palsu (bukan presigned MinIO); job pembersih lampiran yatim belum ada.
+- Status: Q-008 selesai (commit `80f9edb`).
+
+### 2b - Langkah 2 C1: idempotensi laporan (S5) + batas laju + lampiran (2026-10-30)
+- [x] **S5 bersamaan**: `POST /reports` mengambil `pg_advisory_xact_lock(hashtext(clientReportId))` lalu cek ulang di dalam transaksi — pengiriman bersamaan menghasilkan tepat satu 201 dan sisanya 200 (sebelumnya 500/201/500). UNIQUE violation (23505) tetap ditangkap sebagai cadangan.
+- [x] `clientReportId` milik pelapor lain → **422 `IDEMPOTENCY_CONFLICT`** tanpa isi laporan (sebelumnya 200 dengan laporan orang lain).
+- [x] **Batas laju REST §8** kini ditegakkan: HELP_REQUEST per 10 menit + harian, CONDITION_REPORT per 10 menit; angka dari `system_settings.report_rate_limit` (A-020). Jatah diambil setelah pasti laporan baru, jadi pengulangan (termasuk yang kalah balapan) tidak dihitung; permintaan gagal mengembalikan jatah (`RateLimitService.refund`). 429 memuat `Retry-After`.
+- [x] **Lampiran di laporan**: `attachmentIds` hanya bisa menautkan lampiran milik pengunggah sendiri yang belum tertaut (satu `UPDATE … RETURNING`, gagal satu = laporan batal, 400); maksimal `limits.max_attachments` dan tanpa id berulang.
+- [x] **Follow-up** idempoten lewat `clientReportId` (kunci advisory sama; replay → resource sama, pelapor/incident lain → 422); lokasi opsional dari body, selain itu lokasi laporan induk; lampiran dengan aturan yang sama.
+- Tes: `test/reports-idempotency.e2e-spec.ts` (10 e2e: berurutan 201/200/200, 5× bersamaan, pelapor lain 422, CONDITION_REPORT tanpa incident, 429 + Retry-After + pengulangan tidak dihitung, gagal validasi tidak memakan jatah, lampiran orang lain/dipakai ulang/berlebih ditolak, follow-up bersamaan). Helper `resetReportRateLimits`/`userIdOf` di `e2e-utils`; `privacy.e2e-spec` me-reset penghitung laporan per fixture.
+- Verifikasi 2026-10-30: unit 53/53, e2e **47/47** (3× berturut-turut, stabil), `make lint`, `make contract`, `make verify` V1–V11 hijau.
+- Asumsi: A-020.
+- Status C1: belum — lanjut langkah 3 (mesin status & kunci, termasuk cek status akun nonaktif di guard).
