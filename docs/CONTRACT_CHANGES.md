@@ -140,3 +140,10 @@ yang tidak memaksakan salah satu pihak:
 - Usulan: samakan (mis. `PHOTO|VIDEO` di kontrak, atau perluas `CHECK` + seed lampiran).
 - Alasan: contoh `POSTDispatchesIdAccept` memakai `IMAGE`; modul lampiran dibangun Fase 2.
 - Status: proposed
+
+## CC-013: parser `check-coverage.py` salah menghitung rujukan silang sebagai path
+- Tanggal: 2026-10-30
+- Sumber: dokumen REST §5 baris `GET /reports/{id}` memuat rujukan `` `POST /reports/{id}/reveal-contact` `` di sel deskripsi; ROW/BACKTICK regex menangkapnya sebagai path semu `/POST /reports/{id}/reveal-contact` sehingga cakupan dilaporkan 115 (dokumen) vs 114 (kontrak) dan `make contract` GAGAL.
+- Usulan/terapan: parser mengabaikan hasil BACKTICK path yang mengandung spasi (path URL asli tidak mungkin ber-spasi). Tidak ada perubahan path/field kontrak.
+- Verifikasi: `make contract` hijau (cakupan 114↔114; contoh 108 rest OK).
+- Status: applied — menunggu konfirmasi pemilik di C1 (perubahan skrip pemeriksa, bukan kontrak).

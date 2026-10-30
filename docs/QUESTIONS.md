@@ -11,3 +11,8 @@ Pertanyaan agent yang dikelompokkan per fase. Format: `Q-001`, fase, pertanyaan,
 - Q-005 (0a): CI provider belum diputuskan → **Dijawab (D-008):** GitHub Actions (Linux, dukungan Docker, citra di GHCR); semua pemeriksaan tetap ada di target `make`.
 
 Pertanyaan lain yang terjawab 2026-10-28: judul kontrak **C0** disetujui, `CC-003`..`CC-006` disetujui penerapannya, `A-018` (penamaan env) diputuskan — lihat `DECISIONS.md` bagian 0 dan `CONTRACT_CHANGES.md`.
+
+## Fase 2 — terbuka
+
+- Q-006 (2a, 2026-10-30): **Persetujuan C1**. Review kode + verifikasi ulang menemukan bahwa koreksi klaim 2a tanggal 2026-10-29 tidak akurat (bentuk respons belum sesuai kontrak: `dispatchSummary`/`attentionReasons` tidak pernah dikirim, `reporter`/`attachments` hardcode, `GET /incidents` tanpa filter; `reveal-contact` tanpa `@RequirePermission`/audit; filter pemilik laporan tidak berfungsi; rekomendasi memakai ID karangan). Status di PROGRESS.md ditarik ke "DALAM GERBANG". Opsi: (a) setujui daftar "Sisa 2a" di PROGRESS.md sebagai pekerjaan penutup gerbang Fase 2, lalu review ulang; (b) prioritaskan sebagian item saja (mis. hanya isu PII/keamanan — visibilitas/reveal-contact) dan sisanya ke Fase berikutnya. Rekomendasi agent: (a). Dampak bila tidak dijawab: Fase 3 tidak boleh dimulai (aturan AGENTS.md #13).
+- Q-007 (2a, 2026-10-30): Nasib berkas WIP `backend/src/sim/` (untracked). Sudah dihapus 2026-10-30 karena melanggar aturan #4 (tulis dispatch langsung ke DB, bukan via REST) dan status tidak sesuai kontrak. Rekomendasi agent: bangun sim:bot di Fase 3 melalui API (sesuai `seed-demo-aplikasi-darurat.md`). Konfirmasi bila berbeda pendapat.
