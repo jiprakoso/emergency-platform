@@ -45,7 +45,7 @@ export class AttachmentsService {
       reportId: null,
       dispatchId: null,
       uploadedBy: principal?.userId ?? null,
-      kind: body.kind === 'DOCUMENT' ? 'PHOTO' : body.kind,
+      kind: body.kind,
       status: 'PENDING',
       storageKey,
       mimeType: body.mimeType,

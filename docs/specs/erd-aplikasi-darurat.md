@@ -403,7 +403,7 @@ Index:
 
 Index: unique(`client_report_id`), (`incident_id`), (`reporter_id`, `created_at` desc), GiST(`location`), partial (`created_at`) where `incident_id is null and report_kind = 'CONDITION_REPORT'` untuk peta pemantauan.
 
-**`attachments`**: `id`, `incident_id` (null), `report_id` (null), `dispatch_id` (null), `uploaded_by`, `kind` (`PHOTO`/`VIDEO`), `status` (`PENDING`/`CONFIRMED`), `confirmed_at` (null), `storage_key`, `mime_type`, `size_bytes`, `width`, `height`, `created_at`. `CHECK` minimal satu dari tiga relasi terisi. Berkas fisik di object storage, akses lewat signed URL.
+**`attachments`**: `id`, `incident_id` (null), `report_id` (null), `dispatch_id` (null), `uploaded_by`, `kind` (`IMAGE`/`VIDEO`/`DOCUMENT`), `status` (`PENDING`/`CONFIRMED`), `confirmed_at` (null), `storage_key`, `mime_type`, `size_bytes`, `width`, `height`, `created_at`. Ketiga relasi boleh kosong (lampiran diunggah sebelum laporan ada; yatim dibersihkan job, kepemilikan lewat `uploaded_by`) — D-014. Berkas fisik di object storage, akses lewat signed URL.
 
 **`incident_casualties`**: riwayat data korban (baris terbaru = kondisi terkini) 🔶
 

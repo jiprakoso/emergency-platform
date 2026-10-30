@@ -3,7 +3,7 @@ import { Incident } from './incident.entity';
 import { IncidentReport } from './incident-report.entity';
 import { User } from './user.entity';
 
-export type AttachmentKind = 'PHOTO' | 'VIDEO' | 'IMAGE' | 'DOCUMENT';
+export type AttachmentKind = 'IMAGE' | 'VIDEO' | 'DOCUMENT';
 export type AttachmentStatus = 'PENDING' | 'CONFIRMED';
 
 @Entity('attachments')

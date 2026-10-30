@@ -110,7 +110,7 @@ yang tidak memaksakan salah satu pihak:
 - Usulan: samakan salah satu — tambahkan `REPORT_UPDATE` ke `CHECK` (perlu migrasi), atau ganti nilai FCM/contoh jadi `INCIDENT_UPDATE`.
 - Alasan: keduanya sumber resmi dan saling bertentangan; modul notifikasi dibangun Fase 4-5.
 - Dampak: `NotificationView.kind` sementara `type: string` (tanpa enum) agar cepat diputuskan; quicktype kehilangan enum bila tidak diselesaikan.
-- Status: proposed
+- Status: diterapkan — CHECK ditambah `REPORT_UPDATE`. Semula diedit langsung di migrasi `1700000001000` (commit `65841e1`) sehingga tidak sampai ke DB yang sudah ada; 2026-10-30 dipindah ke migrasi `1700000002000` (CC-014, D-014).
 
 ## CC-009: `severity` — `MASS` (ERD/DB) vs `CRITICAL` (kontrak)
 - Tanggal: 2026-10-28
@@ -139,7 +139,7 @@ yang tidak memaksakan salah satu pihak:
 - Sumber: kontrak `AttachmentRef.kind` (disetujui C0) vs `CHECK attachments.kind` (`PHOTO|VIDEO`).
 - Usulan: samakan (mis. `PHOTO|VIDEO` di kontrak, atau perluas `CHECK` + seed lampiran).
 - Alasan: contoh `POSTDispatchesIdAccept` memakai `IMAGE`; modul lampiran dibangun Fase 2.
-- Status: proposed
+- Status: approved — diterapkan 2026-10-30 (D-014): nilai kontrak `IMAGE|VIDEO|DOCUMENT` dipertahankan; DB disesuaikan lewat migrasi `1700000002000` (baris `PHOTO` lama → `IMAGE`).
 
 ## CC-013: parser `check-coverage.py` salah menghitung rujukan silang sebagai path
 - Tanggal: 2026-10-30
@@ -153,4 +153,5 @@ yang tidak memaksakan salah satu pihak:
 - Sumber: commit `65841e1` mengubah `1700000001000-core-schema.ts` di tempat (kind `PHOTO|VIDEO|IMAGE|DOCUMENT`), padahal migrasi itu sudah diterapkan — DB dev dan DB uji `emergency_platform_test` masih memakai CHECK lama `kind IN ('PHOTO','VIDEO')` (diperiksa `pg_constraint`). Melanggar AGENTS.md #10 (perubahan skema lewat migrasi baru). Selain itu CHECK `incident_id IS NOT NULL OR report_id IS NOT NULL OR dispatch_id IS NOT NULL` bertentangan dengan alur 3 langkah REST §5.3 (lampiran `PENDING` dibuat sebelum laporan ada; `ownerId` boleh diisi belakangan).
 - Dampak: `POST /attachments/uploads` **selalu 500** di DB mana pun yang dibuat dari migrasi yang sudah berjalan.
 - Usulan: (1) kembalikan berkas `1700000001000` ke isi saat diterapkan; (2) migrasi baru yang (a) menetapkan nilai `kind` sesuai keputusan CC-012, (b) melonggarkan CHECK kepemilikan menjadi `status = 'PENDING' OR <salah satu FK terisi>`, plus kolom `purpose` bila diperlukan. Kontrak tidak berubah.
-- Status: proposed — butuh keputusan CC-012 lebih dulu (lihat Q-008).
+- Keputusan (D-014, 2026-10-30): kembalikan berkas + migrasi baru; syarat relasi **dihapus seluruhnya** (bukan hanya untuk `PENDING`), karena jalur `attachmentIds` di `POST /reports` membutuhkan lampiran `CONFIRMED` yang belum terkait.
+- Status: approved — diterapkan 2026-10-30: `1700000001000-core-schema.ts` dikembalikan ke isi sebelum `65841e1`; migrasi `1700000002000-attachments-kind-relation.ts` (naik→turun→naik bersih di DB dev; klon bersih 3 migrasi lulus e2e).

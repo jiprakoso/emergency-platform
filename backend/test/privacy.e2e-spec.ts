@@ -288,19 +288,21 @@ describe('Privasi & akses (S7) + audit', () => {
 
   describe('lampiran: hanya pengunggah / dispatcher', () => {
     it('warga lain tidak dapat konfirmasi atau membaca; pengunggah & dispatcher bisa', async () => {
-      // Fixture DB: `POST /attachments/uploads` masih gagal karena CHECK `attachments`
-      // (kind PHOTO|VIDEO + wajib terkait report/incident/dispatch) — lihat CC-014.
-      const [{ id }] = await db.query<Array<{ id: string }>>(
-        `INSERT INTO attachments (report_id, uploaded_by, kind, status, storage_key, mime_type, size_bytes, created_at)
-         VALUES ($1, $2, 'PHOTO', 'PENDING', 'uploads/uji/foto.jpg', 'image/jpeg', 1024, now()) RETURNING id`,
-        [reportId, userIdOf(citizenA.token)],
-      );
+      // Lampiran belum terkait laporan (Q-008: relasi boleh kosong, kind sesuai kontrak).
+      const up = await http
+        .post('/api/v1/attachments/uploads')
+        .set(auth(citizenA.token))
+        .send({ fileName: 'foto.jpg', mimeType: 'image/jpeg', sizeBytes: 1024, kind: 'IMAGE', purpose: 'REPORT' });
+      expect(up.status).toBe(201);
+      const id = up.body.data.attachmentId as string;
 
       expectErrorEnvelope(await http.post(`/api/v1/attachments/${id}/confirm`).set(auth(citizenB.token)), 'NOT_FOUND', 404);
       expectErrorEnvelope(await http.get(`/api/v1/attachments/${id}/url`).set(auth(citizenB.token)), 'NOT_FOUND', 404);
       expectErrorEnvelope(await http.get(`/api/v1/attachments/${id}/url`).set(auth(responder)), 'NOT_FOUND', 404);
 
-      expect((await http.post(`/api/v1/attachments/${id}/confirm`).set(auth(citizenA.token))).status).toBe(200);
+      const confirmed = await http.post(`/api/v1/attachments/${id}/confirm`).set(auth(citizenA.token));
+      expect(confirmed.status).toBe(200);
+      expect(confirmed.body.data).toMatchObject({ kind: 'IMAGE', status: 'CONFIRMED', reportId: null });
       expect((await http.get(`/api/v1/attachments/${id}/url`).set(auth(dispatcher))).status).toBe(200);
     });
   });

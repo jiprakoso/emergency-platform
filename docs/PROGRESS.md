@@ -201,8 +201,16 @@ Rencana penutupan C1 (urutan): **(1) keamanan/PII + audit + S7** → (2) idempot
 - [x] Kode sukses sesuai kontrak: `lock`, `lock/renew`, `verify`, `invalidate`, `merge`, `resolve`, `close`, `withdraw`, `reveal-contact`, `attachments/{id}/confirm` → 200.
 - Tes: `src/modules/audit/audit.service.spec.ts` (3 unit) + `test/privacy.e2e-spec.ts` (23 e2e: S7 kepemilikan laporan, reveal-contact 403/200 + baris audit tanpa PII + `requestId`, 403 warga di endpoint incident, responder 404 / pra-accept tanpa data sensitif, dispatcher melihat lokasi, catatan PUBLIC ditolak, milestone lead, audit lock_override/invalidate/merge/set_lead, kepemilikan lampiran).
 - Verifikasi 2026-10-30: `make lint` 0/0, `typecheck` 0, `make contract` OK, unit **53/53**, e2e **37/37**.
-- Penyimpangan: tes kepemilikan lampiran memakai fixture DB karena `POST /attachments/uploads` selalu 500 (**CC-014**, Q-008). Relasi responder di tes memakai baris `dispatches` fixture (endpoint dispatch = Fase 3).
+- Penyimpangan: relasi responder di tes memakai baris `dispatches` fixture (endpoint dispatch = Fase 3).
 - Sisa S7: "akun responder dinonaktifkan → token ditolak, token FCM dicabut" belum ada — `JwtAuthGuard` tidak memeriksa status akun dan endpoint penonaktifan staf baru di Fase 5/Dx6. Diusulkan dikerjakan di langkah 3 (cek status akun di guard, dengan fixture DB).
 - Sisa audit: `auth.refresh_reuse_detected` (REST §9, modul auth Fase 1) belum menulis `audit_logs` — tambahkan memakai `AuditService` di langkah berikutnya.
-- Pertanyaan terbuka: **Q-008** (memblokir alur lampiran).
-- Status: **langkah 1 selesai; C1 belum** — lanjut langkah 2 (S5).
+- Status: **langkah 1 selesai** (commit `b52bd19`).
+
+**Q-008 dijawab (D-014, 2026-10-30) dan diterapkan:**
+- [x] `1700000001000-core-schema.ts` dikembalikan ke isi saat diterapkan (sebelum `65841e1`).
+- [x] Migrasi baru `1700000002000-attachments-kind-relation.ts`: `attachments.kind` → `IMAGE|VIDEO|DOCUMENT` (baris `PHOTO` → `IMAGE`), CHECK relasi `chk_attachments_relation` dihapus, `notifications.kind` + `REPORT_UPDATE` (CC-008 dipindah dari edit di tempat). Turun: lossy, didokumentasikan.
+- [x] `AttachmentKind` entitas = `IMAGE|VIDEO|DOCUMENT`; konversi `DOCUMENT→PHOTO` di service dihapus. `POST /attachments/uploads` → 201, `confirm` lampiran belum terkait → 200 (diuji lewat API, fixture DB dihapus).
+- Verifikasi: naik→turun→naik bersih di DB dev; klon bersih (DB baru, 3 migrasi) lulus `privacy.e2e-spec`; unit 53/53, e2e 37/37, `make lint`, `make contract`, `make verify` V1–V11 hijau.
+- Dokumen: ERD `attachments`, CC-008/CC-012/CC-014 → diterapkan, `DECISIONS.md` D-014, Q-008 answered.
+- Catatan tersisa (langkah 5): `ownerId` di `POST /attachments/uploads` belum dipakai untuk menautkan; `attachmentIds` di `POST /reports` menautkan lampiran tanpa cek pemilik/status; URL unggah masih palsu (bukan presigned MinIO); job pembersih lampiran yatim belum ada.
+- Status C1: belum — lanjut langkah 2 (S5).

@@ -27,6 +27,7 @@
 | D-011 | **Sistem operasi mesin pengembang: Linux** (menjawab Q-003) | `Makefile` tetap mekanisme utama; tidak perlu alternatif lintas-OS |
 | D-012 | **Kebijakan cabang: agent boleh meng-push langsung ke `main`** setelah seluruh gerbang (`make lint`, `make test`, `make contract`) hijau (menjawab Q-005) | Tidak wajib pull request; kebijakan dapat diubah pemilik kapan pun |
 | D-013 | **Penamaan env (A-018): pertahankan nama env implementasi** (`DB_HOST`/`DB_PORT`/`DB_USERNAME`/`DB_PASSWORD`/`DB_NAME`, `REDIS_HOST`/`REDIS_PORT`, `MINIO_*`, `NODE_ENV`) — bukan `DATABASE_URL`/`REDIS_URL`/`ENV` handoff §5.2; `SAMPLE_MODE` tetap diwakili `system_settings.sample_mode` | Tidak ada perubahan kode; handoff §5.2 dilabeli sebagai default yang diganti (tercatat di `ASSUMPTIONS.md` A-018) |
+| D-014 | **Lampiran (Q-008, 2026-10-30): `attachments.kind` = `IMAGE\|VIDEO\|DOCUMENT`** sesuai kontrak C0 (menutup CC-012); **syarat relasi lampiran dihapus** — lampiran `PENDING` maupun `CONFIRMED` boleh belum terkait report/incident/dispatch, yatim dibersihkan job; **perubahan skema lewat migrasi baru** — `1700000001000-core-schema.ts` dikembalikan ke isi saat diterapkan (CC-014) | Migrasi `1700000002000-attachments-kind-relation.ts` (ikut memindahkan CC-008 `notifications.kind` + `REPORT_UPDATE`); konversi `DOCUMENT→PHOTO` di service dihapus; `POST /attachments/uploads` berfungsi |
 
 ## 2. Keputusan yang belum diketahui pemilik (default berlaku sementara)
 
@@ -43,6 +44,7 @@ Semua pertanyaan tabel ini terjawab dan dipindahkan ke bagian 1:
 | Q-003 | Sistem operasi mesin pengembang? | Linux | D-011 |
 | Q-004 | Tempat menyimpan citra Docker? | GitHub Container Registry (GHCR) | D-008 |
 | Q-005 | Kebijakan cabang dan peninjauan? | Push langsung ke `main` setelah gerbang hijau | D-012 |
+| Q-008 (2026-10-30) | Nilai `attachments.kind` & relasi lampiran; penanganan migrasi yang diedit di tempat | `IMAGE\|VIDEO\|DOCUMENT`; relasi boleh kosong; kembalikan berkas + migrasi baru | D-014 |
 
 ### Pertanyaan deployment (untuk instansi/stakeholder, sebelum Fase 7)
 
