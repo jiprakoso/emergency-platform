@@ -78,6 +78,8 @@ Prioritas bila bertentangan: kontrak (setelah disetujui) > dokumen spesifikasi >
 
 Nama dapat disesuaikan di Fase 0, **dan harus diperbarui di berkas ini**.
 
+Swagger UI (dev/test, mati di `NODE_ENV=production`): `http://<host>:<PORT>/api/docs` — menyajikan `contracts/openapi.yaml` apa adanya; "Try it out" memanggil server ini (`/api/v1`).
+
 ## Konvensi singkat
 
 - Backend: NestJS, lapisan Controller (tipis) → Service (transaksi) → Repository; mesin status dan kebijakan terpisah; satu use case yang mengubah state = satu transaksi (data + `incident_events` + `outbox_events` + `audit_logs`).

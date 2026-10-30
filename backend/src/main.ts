@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { ValidationPipe } from '@nestjs/common';
+import { setupApiDocs } from './docs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -25,6 +26,8 @@ async function bootstrap() {
   );
   // Kesehatan ikut di bawah prefix versi (kontrak `GET /health`, `/health/ready`).
   app.setGlobalPrefix('api/v1');
+  // Swagger UI dari contracts/openapi.yaml (dev/test saja).
+  setupApiDocs(app);
   const port = process.env.PORT || 3000;
   await app.listen(port);
 }

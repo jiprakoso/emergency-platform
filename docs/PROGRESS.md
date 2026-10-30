@@ -243,4 +243,14 @@ Rencana penutupan C1 (urutan): **(1) keamanan/PII + audit + S7** → (2) idempot
 - Verifikasi 2026-10-30: unit **116/116**, e2e **66/66** (3× berturut-turut), `make lint`, `make contract`, `make verify` V1–V11 hijau.
 - Asumsi: A-021, A-022, A-023. Usulan kontrak: **CC-015** (`lockedBy`/`lockedAt` pada `INCIDENT_LOCKED`).
 - Belum dikerjakan (menunggu CC-011): nama `event_type` tetap pola lama dot-lowercase; tidak ada event baru yang ditambahkan.
+- Status: langkah 3 selesai (commit `7e9d41d`).
+
+### 2b - Swagger UI untuk tinjauan C1 (2026-10-30)
+- [x] `GET /api/docs` (di luar prefix `api/v1`): Swagger UI contract-first — menyajikan `contracts/openapi.yaml` apa adanya (tanpa dekorator, tidak bisa menyimpang dari kontrak C0). "Try it out" memanggil server yang sama (`servers: /api/v1`), tombol *Authorize* untuk Bearer; `persistAuthorization: false` (token tidak disimpan di browser, perangkap §11 no. 20). Mati di `NODE_ENV=production`.
+- [x] CSP helmet tetap berlaku; khusus rute docs `upgrade-insecure-requests` dibuang agar bisa dibuka lewat `http://<ip-lan>`.
+- Dependensi: `swagger-ui-express`, `yaml` (+ `@types/swagger-ui-express`).
+- Tes: `test/api-docs.e2e-spec.ts` (4 e2e: halaman tampil, **semua path kontrak** ada di dokumen tersaji + server `/api/v1` + `bearerAuth`, CSP tanpa upgrade, tidak terpasang di produksi). Helper `createTestApp(beforeInit)` untuk middleware sebelum init.
+- Catatan: kontrak memuat 114 endpoint; endpoint Fase 3–5 (dispatch, alert, shift, admin, sync, dashboard) tampil di Swagger tetapi belum diimplementasi (404).
+- Verifikasi: unit 116/116, e2e 70/70, `make lint`, `make contract` hijau; server nyata: `/api/docs` 200, login staf → `GET /incidents` 200.
+
 - Status C1: belum — lanjut langkah 4 (view per audiens: serializer bersama, respons mutasi = `DispatcherViewIncident`, `GET /incidents` filter + kursor, `dispatchSummary`/`attentionReasons`).

@@ -31,7 +31,9 @@ export const CITIZEN_DEVICE = {
  * (prefix versi, pipe validasi, filter amplop galat, middleware requestId),
  * tanpa helmet/rate-limit tambahan agar fokus pada perilaku yang diuji.
  */
-export async function createTestApp(): Promise<{ app: INestApplication; http: Http }> {
+export async function createTestApp(
+  beforeInit?: (app: INestApplication) => void,
+): Promise<{ app: INestApplication; http: Http }> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
   app.use(requestIdMiddleware);
@@ -45,6 +47,9 @@ export async function createTestApp(): Promise<{ app: INestApplication; http: Ht
   );
   app.useGlobalFilters(new AllExceptionsFilter());
   app.setGlobalPrefix('api/v1');
+  // Middleware Express (mis. Swagger UI) harus terpasang sebelum init: Nest
+  // memasang penangan 404 saat init.
+  beforeInit?.(app);
   await app.init();
   return { app, http: request(app.getHttpServer()) };
 }
