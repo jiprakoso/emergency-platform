@@ -4,6 +4,8 @@ import { CurrentUser } from '../auth/auth.decorators';
 import { AuthPrincipal } from '../auth/auth.types';
 import { envelope } from '../../common/envelope';
 import { RequirePermission } from '../permissions/permission.decorators';
+import { AuditCtx } from '../audit/audit-context.decorator';
+import type { AuditContext } from '../audit/audit.service';
 import type {
   CasualtyBody,
   CloseBody,
@@ -23,19 +25,22 @@ export class IncidentsController {
   constructor(private readonly svc: IncidentsService) {}
 
   @Get('incidents')
+  @RequirePermission('incident.read_all')
   async list() {
     return this.svc.list();
   }
 
   @Get('incidents/:id')
-  async getById(@Param('id') id: string, @CurrentUser() principal?: AuthPrincipal) {
+  @RequirePermission('incident.read_all', 'incident.read_related')
+  async getById(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal) {
     return envelope(await this.svc.getById(id, principal));
   }
 
   @Post('incidents/:id/lock')
   @RequirePermission('incident.lock')
-  async lock(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: LockBody) {
-    return envelope(await this.svc.lock(id, principal, body));
+  @HttpCode(200)
+  async lock(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @AuditCtx() ctx: AuditContext, @Body() body?: LockBody) {
+    return envelope(await this.svc.lock(id, principal, body, ctx));
   }
 
   @Delete('incidents/:id/lock')
@@ -48,47 +53,54 @@ export class IncidentsController {
 
   @Post('incidents/:id/lock/renew')
   @RequirePermission('incident.lock')
+  @HttpCode(200)
   async renew(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal) {
     return envelope(await this.svc.renewLock(id, principal));
   }
 
   @Post('incidents/:id/verify')
   @RequirePermission('incident.verify')
+  @HttpCode(200)
   async verify(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: VerifyBody) {
     return envelope(await this.svc.verify(id, principal, body));
   }
 
   @Post('incidents/:id/invalidate')
   @RequirePermission('incident.invalidate')
-  async invalidate(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: InvalidateBody) {
-    return envelope(await this.svc.invalidate(id, principal, body));
+  @HttpCode(200)
+  async invalidate(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @AuditCtx() ctx: AuditContext, @Body() body?: InvalidateBody) {
+    return envelope(await this.svc.invalidate(id, principal, body, ctx));
   }
 
   @Post('incidents/:id/merge')
   @RequirePermission('incident.merge')
-  async merge(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: MergeBody) {
-    return envelope(await this.svc.merge(id, principal, body));
+  @HttpCode(200)
+  async merge(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @AuditCtx() ctx: AuditContext, @Body() body?: MergeBody) {
+    return envelope(await this.svc.merge(id, principal, body, ctx));
   }
 
   @Put('incidents/:id/lead')
   @RequirePermission('incident.set_lead')
-  async lead(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: LeadBody) {
-    return envelope(await this.svc.setLead(id, principal, body));
+  async lead(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @AuditCtx() ctx: AuditContext, @Body() body?: LeadBody) {
+    return envelope(await this.svc.setLead(id, principal, body, ctx));
   }
 
   @Post('incidents/:id/resolve')
   @RequirePermission('incident.close')
+  @HttpCode(200)
   async resolve(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: ResolveBody) {
     return envelope(await this.svc.resolve(id, principal, body));
   }
 
   @Post('incidents/:id/close')
   @RequirePermission('incident.close')
+  @HttpCode(200)
   async close(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal, @Body() body?: CloseBody) {
     return envelope(await this.svc.close(id, principal, body));
   }
 
   @Get('incidents/:id/nearby')
+  @RequirePermission('incident.read_all')
   async nearby(@Param('id') id: string, @Query('radiusM') radiusM?: string, @Query('hours') hours?: string) {
     const res = await this.svc.nearby(id, radiusM ? parseInt(radiusM) : 300, hours ? parseInt(hours) : 6);
     return envelope(res);

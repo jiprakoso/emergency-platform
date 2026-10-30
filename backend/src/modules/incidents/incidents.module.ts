@@ -7,9 +7,10 @@ import { SystemSetting } from '../../database/entities/system-setting.entity';
 import { IncidentsService } from './incidents.service';
 import { IncidentsController } from './incidents.controller';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Incident, IncidentEvent, OutboxEvent, SystemSetting]), PermissionsModule],
+  imports: [TypeOrmModule.forFeature([Incident, IncidentEvent, OutboxEvent, SystemSetting]), PermissionsModule, AuditModule],
   controllers: [IncidentsController],
   providers: [IncidentsService],
   exports: [IncidentsService],

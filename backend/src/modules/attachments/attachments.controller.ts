@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { AttachmentsService } from './attachments.service';
 import { CreateUploadDto } from './dto/attachments.dto';
 import { CurrentUser } from '../auth/auth.decorators';
@@ -15,6 +15,7 @@ export class AttachmentsController {
   }
 
   @Post('attachments/:id/confirm')
+  @HttpCode(200)
   async confirm(@Param('id') id: string, @CurrentUser() principal: AuthPrincipal) {
     return envelope(await this.svc.confirm(id, principal));
   }

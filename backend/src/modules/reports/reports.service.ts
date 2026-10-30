@@ -13,6 +13,7 @@ import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
 import { randomUUID } from 'node:crypto';
 import { CreateReportDto, FollowUpDto, WithdrawDto } from './dto/reports.dto';
+import { AuditContext, AuditService } from '../audit/audit.service';
 
 function makeIncidentCode(now: Date): string {
   const y = now.getUTCFullYear();
@@ -34,7 +35,20 @@ export class ReportsService {
     @InjectRepository(User) private readonly users: Repository<User>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly clock: ClockService,
+    private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Laporan milik pemanggil saja (`report.read_own`, pembatas "milik sendiri").
+   * Laporan orang lain dijawab 404 agar keberadaannya tidak bocor (handoff §11 no. 14).
+   */
+  private async findOwned(id: string, principal: AuthPrincipal | undefined, relations: string[] = []): Promise<IncidentReport> {
+    const report = await this.reports.findOne({ where: { id }, relations });
+    if (!report || !principal?.userId || report.reporterId !== principal.userId) {
+      throw AppError.notFound('Laporan tidak ditemukan.');
+    }
+    return report;
+  }
 
   async createReport(principal: AuthPrincipal | undefined, body: CreateReportDto) {
     const userId = principal?.userId;
@@ -179,15 +193,13 @@ export class ReportsService {
     return { data: list.map(r => ({ id: r.id, reportKind: r.reportKind, status: r.status, createdAt: r.createdAt })), page: { hasMore: false, limit: 25 } };
   }
 
-  async getById(id: string, _principal: AuthPrincipal | undefined) {
-    const report = await this.reports.findOne({ where: { id }, relations: ['incident'] });
-    if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
+  async getById(id: string, principal: AuthPrincipal | undefined) {
+    const report = await this.findOwned(id, principal, ['incident']);
     return this.buildCitizenView(report);
   }
 
-  async timeline(id: string) {
-    const report = await this.reports.findOne({ where: { id } });
-    if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
+  async timeline(id: string, principal: AuthPrincipal | undefined) {
+    const report = await this.findOwned(id, principal);
     // Ambil incident_events terkait jika ada incident (hanya PUBLIC untuk warga)
     const events = report.incidentId
       ? await this.incidentEvents.find({ where: { incidentId: report.incidentId }, order: { id: 'ASC' }, take: 50 })
@@ -199,8 +211,7 @@ export class ReportsService {
   }
 
   async followUp(id: string, principal: AuthPrincipal | undefined, body: FollowUpDto) {
-    const report = await this.reports.findOne({ where: { id }, relations: ['incident'] });
-    if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
+    const report = await this.findOwned(id, principal, ['incident']);
     if (!report.incidentId) throw AppError.validation('Laporan belum terhubung ke insiden.');
     // Buat laporan susulan terkait incident yang sama
     const now = this.clock.now();
@@ -239,19 +250,38 @@ export class ReportsService {
     return this.buildCitizenView(result!);
   }
 
-  async withdraw(id: string, _principal: AuthPrincipal | undefined, _body: WithdrawDto) {
-    const report = await this.reports.findOne({ where: { id }, relations: ['incident'] });
-    if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
+  async withdraw(id: string, principal: AuthPrincipal | undefined, _body: WithdrawDto) {
+    const report = await this.findOwned(id, principal, ['incident']);
     report.status = 'WITHDRAWN';
     await this.reports.save(report);
     // Catat audit/event sederhana
     return this.buildCitizenView(report);
   }
 
-  async revealContact(id: string, _principal: AuthPrincipal | undefined) {
-    const report = await this.reports.findOne({ where: { id } });
-    if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
-    // Hanya contoh - sesungguhnya butuh izin dan audit
-    return { phone: report.reporterPhone || null, name: report.reporterName || null };
+  /**
+   * Buka nama/nomor pelapor penuh (`pii.reveal_reporter`). Nilai dibaca dari
+   * laporan (input manual) atau akun pelapor (laporan aplikasi). Baris audit
+   * `pii.view_reporter` ditulis di transaksi yang sama, tanpa nilai PII-nya.
+   */
+  async revealContact(id: string, principal: AuthPrincipal, ctx: AuditContext) {
+    return this.dataSource.transaction(async (manager) => {
+      const report = await manager.getRepository(IncidentReport).findOne({ where: { id }, relations: ['reporter'] });
+      if (!report) throw AppError.notFound('Laporan tidak ditemukan.');
+      await this.audit.record(
+        {
+          actorUserId: principal.userId,
+          action: 'pii.view_reporter',
+          entityType: 'incident_report',
+          entityId: report.id,
+          after: { incidentId: report.incidentId, fields: ['name', 'phone'] },
+        },
+        ctx,
+        manager,
+      );
+      return {
+        name: report.reporterName ?? report.reporter?.fullName ?? null,
+        phone: report.reporterPhone ?? report.reporter?.phone ?? null,
+      };
+    });
   }
 }

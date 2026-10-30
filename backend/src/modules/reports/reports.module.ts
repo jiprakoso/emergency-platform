@@ -10,11 +10,13 @@ import { User } from '../../database/entities/user.entity';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { ClockModule } from '../../common/clock/clock.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([IncidentReport, Incident, IncidentType, Attachment, OutboxEvent, IncidentEvent, User]),
     ClockModule,
+    AuditModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService],

@@ -147,3 +147,10 @@ yang tidak memaksakan salah satu pihak:
 - Usulan/terapan: parser mengabaikan hasil BACKTICK path yang mengandung spasi (path URL asli tidak mungkin ber-spasi). Tidak ada perubahan path/field kontrak.
 - Verifikasi: `make contract` hijau (cakupan 114↔114; contoh 108 rest OK).
 - Status: applied — menunggu konfirmasi pemilik di C1 (perubahan skrip pemeriksa, bukan kontrak).
+
+## CC-014: migrasi inti diubah setelah diterapkan; CHECK `attachments` memblokir alur unggah
+- Tanggal: 2026-10-30
+- Sumber: commit `65841e1` mengubah `1700000001000-core-schema.ts` di tempat (kind `PHOTO|VIDEO|IMAGE|DOCUMENT`), padahal migrasi itu sudah diterapkan — DB dev dan DB uji `emergency_platform_test` masih memakai CHECK lama `kind IN ('PHOTO','VIDEO')` (diperiksa `pg_constraint`). Melanggar AGENTS.md #10 (perubahan skema lewat migrasi baru). Selain itu CHECK `incident_id IS NOT NULL OR report_id IS NOT NULL OR dispatch_id IS NOT NULL` bertentangan dengan alur 3 langkah REST §5.3 (lampiran `PENDING` dibuat sebelum laporan ada; `ownerId` boleh diisi belakangan).
+- Dampak: `POST /attachments/uploads` **selalu 500** di DB mana pun yang dibuat dari migrasi yang sudah berjalan.
+- Usulan: (1) kembalikan berkas `1700000001000` ke isi saat diterapkan; (2) migrasi baru yang (a) menetapkan nilai `kind` sesuai keputusan CC-012, (b) melonggarkan CHECK kepemilikan menjadi `status = 'PENDING' OR <salah satu FK terisi>`, plus kolom `purpose` bila diperlukan. Kontrak tidak berubah.
+- Status: proposed — butuh keputusan CC-012 lebih dulu (lihat Q-008).

@@ -13,6 +13,8 @@ import { randomUUID } from 'node:crypto';
 import { IncidentReport } from '../../database/entities/incident-report.entity';
 import { IncidentCasualty } from '../../database/entities/incident-casualty.entity';
 import { resolvePublicStatus } from './resolve-public-status';
+import { AuditContext, AuditService } from '../audit/audit.service';
+import type { EventVisibility } from '../../database/entities/incident-event.entity';
 import type {
   CasualtyBody,
   CloseBody,
@@ -27,6 +29,8 @@ import type {
   VerifyBody,
 } from './dto/incidents.dto';
 
+const NOTE_VISIBILITIES: readonly EventVisibility[] = ['INTERNAL', 'LEAD', 'UNITS'];
+
 @Injectable()
 export class IncidentsService {
   constructor(
@@ -37,7 +41,25 @@ export class IncidentsService {
     private readonly clock: ClockService,
     private readonly permissions: PermissionService,
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Relasi responder ke incident (`incident.read_related`, REST §3): punya dispatch
+   * untuk unit/organisasinya, atau organisasinya lead. `accepted` = salah satu
+   * dispatch itu sudah melewati tahap offer (batas `OfferView` → `UnitView`).
+   */
+  private async relationOf(inc: Incident, principal: AuthPrincipal): Promise<{ related: boolean; isLead: boolean; accepted: boolean }> {
+    const isLead = !!principal.orgId && inc.leadOrganizationId === principal.orgId;
+    const rows: Array<{ status: string }> = await this.dataSource.query(
+      `SELECT status FROM dispatches
+        WHERE incident_id = $1
+          AND (organization_id = $2 OR ($3::uuid IS NOT NULL AND unit_id = $3::uuid))`,
+      [inc.id, principal.orgId ?? null, principal.unitId ?? null],
+    );
+    const accepted = rows.some((r) => ['ACCEPTED', 'EN_ROUTE', 'ON_SCENE', 'DONE'].includes(r.status));
+    return { related: isLead || rows.length > 0, isLead, accepted };
+  }
 
   /** geography (driver PostGIS) → {lat, lng} tanpa `any`. */
   private coords(raw: string): { lat: number | undefined; lng: number | undefined } {
@@ -57,9 +79,13 @@ export class IncidentsService {
     return { data, page: { hasMore: false, limit: 25 } };
   }
 
-  async getById(id: string, principal?: AuthPrincipal) {
+  async getById(id: string, principal: AuthPrincipal) {
     const inc = await this.incidents.findOne({ where: { id }, relations: ['type', 'district', 'village', 'leadOrganization'] });
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+    const canReadAll = await this.permissions.hasPermission(principal.userId, 'incident.read_all');
+    // Responder tanpa relasi: 404, bukan 403, agar keberadaan incident tidak bocor.
+    const relation = canReadAll ? null : await this.relationOf(inc, principal);
+    if (relation && !relation.related) throw AppError.notFound('Insiden tidak ditemukan.');
 
     // Calculate publicStatus using the status engine
     const publicStatus = await resolvePublicStatus(this.dataSource, inc.id);
@@ -72,39 +98,7 @@ export class IncidentsService {
     const dispatchRepo = this.incidents.manager.getRepository('Dispatch');
     const dispatches = await dispatchRepo.find({ where: { incidentId: inc.id } });
 
-    if (!principal?.userId) {
-      // Public-like view: no precise location, masked contact
-      return {
-        id: inc.id,
-        code: inc.code,
-        type: inc.type ? { code: inc.type.code, name: inc.type.name } : undefined,
-        status: inc.status,
-        publicStatus: publicStatus,
-        severity: inc.severity,
-        escalationLevel: inc.escalationLevel,
-        district: inc.district ? { code: inc.district.code, name: inc.district.name } : undefined,
-        village: inc.village ? { code: inc.village.code, name: inc.village.name } : undefined,
-        // Location NOT visible to unauthenticated users
-        addressText: undefined,
-        summary: undefined,
-        leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
-        reporter: { name: null, phoneMasked: null },
-        attachments: [],
-        casualties: casualty ? {
-          injured: casualty.injuredCount,
-          deceased: casualty.deceasedCount,
-          critical: casualty.criticalCount,
-          missing: casualty.missingCount,
-        } : null,
-        dispatches: [],
-      };
-    }
-
-    const userId = principal.userId;
-    // Try to determine if dispatcher/admin
-    const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
-
-    if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
+    if (canReadAll) {
       // Full DispatcherViewIncident shape
       const dispatchList = dispatches.map(d => ({
         organization: d.leadOrganization ? { id: d.leadOrganization.id, name: d.leadOrganization.name } : undefined,
@@ -143,7 +137,9 @@ export class IncidentsService {
         updatedAt: inc.updatedAt,
       };
     }
-    // Responder/limited view - OfferView-like without precise location
+    // Responder: lokasi presisi, alamat, lampiran, pelapor tidak pernah dikirim di sini.
+    // Sebelum accept (OfferView §4.1) dispatch unit lain dan data korban juga disembunyikan.
+    const showOperational = relation!.accepted || relation!.isLead;
     const casualtyData = casualty ? {
       injured: casualty.injuredCount,
       deceased: casualty.deceasedCount,
@@ -172,8 +168,8 @@ export class IncidentsService {
       leadOrganization: inc.leadOrganization ? { id: inc.leadOrganization.id, name: inc.leadOrganization.name } : undefined,
       reporter: { name: null, phoneMasked: null },
       attachments: [],
-      casualties: casualtyData,
-      dispatches: dispatchList,
+      casualties: showOperational ? casualtyData : null,
+      dispatches: showOperational ? dispatchList : [],
     };
   }
 
@@ -185,7 +181,7 @@ export class IncidentsService {
     return 300;
   }
 
-  async lock(id: string, principal: AuthPrincipal | undefined, body?: LockBody) {
+  async lock(id: string, principal: AuthPrincipal | undefined, body?: LockBody, ctx: AuditContext = {}) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const canLock = await this.permissions.hasPermission(userId, 'incident.lock');
@@ -200,29 +196,44 @@ export class IncidentsService {
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
 
     // If locked by someone else and not expired
-    if (inc.lockedBy && inc.lockExpiresAt && inc.lockExpiresAt > now && inc.lockedBy !== userId) {
+    const heldByOther = !!inc.lockedBy && !!inc.lockExpiresAt && inc.lockExpiresAt > now && inc.lockedBy !== userId;
+    if (heldByOther) {
       const canOverride = await this.permissions.hasPermission(userId, 'incident.lock_override');
       if (!body?.force || !canOverride) {
         throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.', []);
       }
     }
 
-    // Atomic update attempt with version if needed - simple approach first
-    const res = await this.incidents
-      .createQueryBuilder()
-      .update(Incident)
-      .set({ lockedBy: userId, lockedAt: now, lockExpiresAt: expiresAt, version: inc.version + 1, updatedAt: now })
-      .where('id = :id', { id })
-      .andWhere(
-        '(locked_by IS NULL OR lock_expires_at < :now OR locked_by = :userId)',
-        { now, userId },
-      )
-      .andWhere('version = :v', { v: inc.version })
-      .execute();
-
-    if (res.affected === 0) {
-      throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.', []);
-    }
+    await this.dataSource.transaction(async (manager) => {
+      // Ambil-alih (override) melewati syarat pemegang kunci; tetap dijaga `version`.
+      const qb = manager
+        .createQueryBuilder()
+        .update(Incident)
+        .set({ lockedBy: userId, lockedAt: now, lockExpiresAt: expiresAt, version: inc.version + 1, updatedAt: now })
+        .where('id = :id', { id })
+        .andWhere('version = :v', { v: inc.version });
+      if (!heldByOther) {
+        qb.andWhere('(locked_by IS NULL OR lock_expires_at < :now OR locked_by = :userId)', { now, userId });
+      }
+      const res = await qb.execute();
+      if (res.affected === 0) {
+        throw new AppError('INCIDENT_LOCKED', 'Insiden sedang dikunci oleh pengguna lain.', []);
+      }
+      if (heldByOther) {
+        await this.audit.record(
+          {
+            actorUserId: userId,
+            action: 'incident.lock_override',
+            entityType: 'incident',
+            entityId: id,
+            before: { lockedBy: inc.lockedBy },
+            after: { lockedBy: userId },
+          },
+          ctx,
+          manager,
+        );
+      }
+    });
 
     const updated = await this.incidents.findOne({ where: { id } });
     return {
@@ -328,7 +339,7 @@ export class IncidentsService {
     return result;
   }
 
-  async invalidate(id: string, principal: AuthPrincipal | undefined, body?: InvalidateBody) {
+  async invalidate(id: string, principal: AuthPrincipal | undefined, body?: InvalidateBody, ctx: AuditContext = {}) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.invalidate');
@@ -348,6 +359,7 @@ export class IncidentsService {
         throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
       }
 
+      const before = { status: inc.status };
       inc.status = 'INVALID';
       inc.invalidReason = body?.reason || null;
       inc.version += 1;
@@ -365,6 +377,11 @@ export class IncidentsService {
           payload: { reason: body?.reason },
         }),
       );
+      await this.audit.record(
+        { actorUserId: userId, action: 'incident.invalidate', entityType: 'incident', entityId: inc.id, before, after: { status: inc.status } },
+        ctx,
+        manager,
+      );
       await outRepo.save(
         outRepo.create({
           eid: randomUUID(),
@@ -379,7 +396,7 @@ export class IncidentsService {
     return result;
   }
 
-  async merge(id: string, principal: AuthPrincipal | undefined, body?: MergeBody) {
+  async merge(id: string, principal: AuthPrincipal | undefined, body?: MergeBody, ctx: AuditContext = {}) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.merge');
@@ -395,6 +412,7 @@ export class IncidentsService {
       if (body?.version !== undefined && body.version !== inc.version) {
         throw new AppError('VERSION_CONFLICT', 'Versi data tidak sesuai.', [], body.version);
       }
+      const before = { status: inc.status, duplicateOfId: inc.duplicateOfId };
       inc.status = 'DUPLICATE';
       inc.duplicateOfId = body?.targetIncidentId || null;
       inc.version += 1;
@@ -402,12 +420,17 @@ export class IncidentsService {
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.duplicated', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { targetIncidentId: body?.targetIncidentId, reason: body?.reason } }));
       await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.duplicated', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await this.audit.record(
+        { actorUserId: userId, action: 'incident.merge', entityType: 'incident', entityId: inc.id, before, after: { status: inc.status, duplicateOfId: inc.duplicateOfId } },
+        ctx,
+        manager,
+      );
       return inc;
     });
     return result;
   }
 
-  async setLead(id: string, principal: AuthPrincipal | undefined, body?: LeadBody) {
+  async setLead(id: string, principal: AuthPrincipal | undefined, body?: LeadBody, ctx: AuditContext = {}) {
     const userId = principal?.userId;
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'incident.set_lead');
@@ -420,6 +443,7 @@ export class IncidentsService {
       const inc = await incRepo.findOne({ where: { id } });
       if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
       if (body?.organizationId === undefined) throw new AppError('VALIDATION_FAILED', 'organizationId wajib diisi.');
+      const before = { leadOrganizationId: inc.leadOrganizationId };
       inc.leadOrganizationId = body.organizationId;
       inc.leadSetAt = now;
       inc.version += 1;
@@ -427,6 +451,11 @@ export class IncidentsService {
       await incRepo.save(inc);
       await evRepo.save(evRepo.create({ incidentId: inc.id, eventType: 'incident.lead_set', actorUserId: userId, visibility: 'INTERNAL', occurredAt: now, recordedAt: now, payload: { organizationId: body.organizationId, reason: body?.reason } }));
       await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.lead_set', incidentId: inc.id, payload: { incidentId: inc.id }, createdAt: now }));
+      await this.audit.record(
+        { actorUserId: userId, action: 'incident.set_lead', entityType: 'incident', entityId: inc.id, before, after: { leadOrganizationId: inc.leadOrganizationId } },
+        ctx,
+        manager,
+      );
       return inc;
     });
     return result;
@@ -596,10 +625,16 @@ export class IncidentsService {
     const can = await this.permissions.hasPermission(userId, 'note.create');
     if (!can) throw AppError.forbidden();
     const now = this.clock.now();
+    // REST §5.5: catatan hanya INTERNAL/LEAD/UNITS — tidak pernah PUBLIC (timeline warga).
+    const visibility: EventVisibility = body?.visibility ?? 'INTERNAL';
+    if (!NOTE_VISIBILITIES.includes(visibility)) {
+      throw AppError.validation('visibility catatan harus INTERNAL, LEAD, atau UNITS.', [{ field: 'visibility', issue: 'invalid' }]);
+    }
+    if (!(await this.incidents.exist({ where: { id } }))) throw AppError.notFound('Insiden tidak ditemukan.');
     const result = await this.incidents.manager.transaction(async (manager) => {
       const evRepo = manager.getRepository(IncidentEvent);
       const outRepo = manager.getRepository(OutboxEvent);
-      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.note_added', actorUserId: userId, visibility: body?.visibility || 'INTERNAL', occurredAt: now, recordedAt: now, payload: { text: body?.text } }));
+      const ev = await evRepo.save(evRepo.create({ incidentId: id, eventType: 'incident.note_added', actorUserId: userId, visibility, occurredAt: now, recordedAt: now, payload: { text: body?.text } }));
       await outRepo.save(outRepo.create({ eid: randomUUID(), eventType: 'incident.note_added', incidentId: id, payload: { incidentId: id }, createdAt: now }));
       return { id: String(ev.id), type: ev.eventType, occurredAt: ev.occurredAt?.toISOString(), actorName: userId, note: body?.text };
     });
@@ -656,6 +691,14 @@ export class IncidentsService {
     if (!userId) throw AppError.unauthenticated();
     const can = await this.permissions.hasPermission(userId, 'milestone.create');
     if (!can) throw AppError.forbidden();
+    const inc = await this.incidents.findOne({ where: { id } });
+    if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
+    // Responder hanya bila organisasinya lead (REST §3 pembatas `lead`; S1 langkah 7).
+    if (!(await this.permissions.hasPermission(userId, 'incident.read_all'))) {
+      const relation = await this.relationOf(inc, principal!);
+      if (!relation.related) throw AppError.notFound('Insiden tidak ditemukan.');
+      if (!relation.isLead) throw new AppError('NOT_LEAD_ORGANIZATION', 'Hanya organisasi pemegang komando yang dapat mencatat milestone.');
+    }
     const now = this.clock.now();
     const result = await this.incidents.manager.transaction(async (manager) => {
       const evRepo = manager.getRepository(IncidentEvent);

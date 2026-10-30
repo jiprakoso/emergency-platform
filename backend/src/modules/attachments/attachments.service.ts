@@ -7,13 +7,29 @@ import { CreateUploadDto } from './dto/attachments.dto';
 import { ClockService } from '../../common/clock/clock.service';
 import { AppError } from '../../common/errors/app-error';
 import { AuthPrincipal } from '../auth/auth.types';
+import { PermissionService } from '../permissions/permission.service';
 
 @Injectable()
 export class AttachmentsService {
   constructor(
     @InjectRepository(Attachment) private readonly attachments: Repository<Attachment>,
     private readonly clock: ClockService,
+    private readonly permissions: PermissionService,
   ) {}
+
+  /**
+   * Lampiran yang boleh diakses pemanggil; selain itu 404 (keberadaan tidak bocor).
+   * `forRead`: pemegang `incident.read_all` juga boleh membaca. Akses responder
+   * pasca-accept (`UnitView`, REST §4.1) dibuka bersama serializer view.
+   */
+  private async findAccessible(id: string, principal: AuthPrincipal | undefined, forRead: boolean): Promise<Attachment> {
+    const att = await this.attachments.findOne({ where: { id } });
+    const userId = principal?.userId;
+    if (!att || !userId) throw AppError.notFound('Lampiran tidak ditemukan.');
+    if (att.uploadedBy === userId) return att;
+    if (forRead && (await this.permissions.hasPermission(userId, 'incident.read_all'))) return att;
+    throw AppError.notFound('Lampiran tidak ditemukan.');
+  }
 
   async createUpload(principal: AuthPrincipal | undefined, body: CreateUploadDto) {
     // Tanpa object storage nyata di lingkungan ini; buat attachment PENDING dengan presigned URL contoh
@@ -45,9 +61,8 @@ export class AttachmentsService {
     };
   }
 
-  async confirm(id: string, _principal: AuthPrincipal | undefined) {
-    const att = await this.attachments.findOne({ where: { id } });
-    if (!att) throw AppError.notFound('Lampiran tidak ditemukan.');
+  async confirm(id: string, principal: AuthPrincipal | undefined) {
+    const att = await this.findAccessible(id, principal, false);
     if (att.status === 'CONFIRMED') {
       return {
         id: att.id,
@@ -75,9 +90,8 @@ export class AttachmentsService {
     };
   }
 
-  async getUrl(id: string, _principal: AuthPrincipal | undefined) {
-    const att = await this.attachments.findOne({ where: { id } });
-    if (!att) throw AppError.notFound('Lampiran tidak ditemukan.');
+  async getUrl(id: string, principal: AuthPrincipal | undefined) {
+    const att = await this.findAccessible(id, principal, true);
     const now = this.clock.now();
     const expiresAt = new Date(now.getTime() + 5 * 60 * 1000);
     return {
