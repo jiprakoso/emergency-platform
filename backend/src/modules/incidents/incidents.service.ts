@@ -12,7 +12,7 @@ import { PermissionService } from '../permissions/permission.service';
 import { randomUUID } from 'node:crypto';
 import { IncidentReport } from '../../database/entities/incident-report.entity';
 import { IncidentCasualty } from '../../database/entities/incident-casualty.entity';
-import { resolveDispatchAgg, resolvePublicStatus } from './resolve-public-status';
+import { resolvePublicStatus } from './resolve-public-status';
 import type {
   CasualtyBody,
   CloseBody,
@@ -62,7 +62,6 @@ export class IncidentsService {
     if (!inc) throw AppError.notFound('Insiden tidak ditemukan.');
 
     // Calculate publicStatus using the status engine
-    const agg = await resolveDispatchAgg(this.dataSource, inc.id);
     const publicStatus = await resolvePublicStatus(this.dataSource, inc.id);
 
     // Query casualties - get the latest casualty record
@@ -554,8 +553,7 @@ export class IncidentsService {
       const userId = principal.userId;
       const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
       if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
-        // Dispatcher/admin see all events
-        data = data.filter((e) => true);
+        // Dispatcher/admin see all events (tanpa penyaringan)
       } else {
         // Responder see only INTERNAL events, not PUBLIC
         data = data.filter((e) => e.visibility !== 'PUBLIC');
@@ -582,8 +580,7 @@ export class IncidentsService {
       const userId = principal.userId;
       const canReadAll = await this.permissions.hasPermission(userId, 'incident.read_all').catch(() => false);
       if (canReadAll || principal.roles?.includes('DISPATCHER') || principal.roles?.includes('SUPERVISOR') || principal.roles?.includes('ADMIN')) {
-        // Dispatcher/admin see all reports
-        data = data.filter((r) => true);
+        // Dispatcher/admin see all reports (tanpa penyaringan)
       } else {
         // Warga see only their own reports (reporterId matches)
         // For now, filter out reports without a known reporter (masked)

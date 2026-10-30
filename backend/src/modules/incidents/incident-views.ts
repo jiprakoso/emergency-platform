@@ -1,5 +1,5 @@
 import type { IncidentSeverity, IncidentStatus } from '../../database/entities/incident.entity';
-import type { DispatchStatusAgg, PublicStatus } from './status-engine';
+import type { PublicStatus } from './status-engine';
 import type { EventVisibility } from '../../database/entities/incident-event.entity';
 
 /** Referensi {code, name} (REST §4). */

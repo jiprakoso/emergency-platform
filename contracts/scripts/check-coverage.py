@@ -34,7 +34,10 @@ def doc_endpoints() -> set[tuple[str, str]]:
         method = row.group(1)
         paths = BACKTICK.findall(row.group(2))
         for p in paths:
-            if "/" not in p:
+            # Path asli tidak pernah mengandung spasi; memakai spasi berarti rujukan
+            # silang di sel deskripsi (mis. "melalui `POST /reports/{id}/reveal-contact`"),
+            # bukan baris endpoint §5.
+            if "/" not in p or re.search(r"\s", p):
                 continue
             eps.add((method, normalize(p)))
     return eps
